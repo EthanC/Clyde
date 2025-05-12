@@ -49,13 +49,15 @@ from clyde import Webhook
 
 relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
 
-relay.set_avatar_url("https://website.com/image_file.png")
+relay.set_avatar_url("https://i.imgur.com/RzkhQgZ.png")
 relay.set_username("Heisenberg")
 
 relay.set_content("[Clyde](https://github.com/EthanC/Clyde) says hi!")
 
 relay.execute()
 ```
+
+![Preview](/assets/readme_example_standard.png)
 
 **Send a Message with Components**
 
@@ -65,7 +67,7 @@ from clyde.components import ActionRow, LinkButton, TextDisplay
 
 relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
 
-relay.set_avatar_url("https://website.com/image_file.png")
+relay.set_avatar_url("https://i.imgur.com/BpcKmVO.png")
 relay.set_username("TARS")
 
 greeting: TextDisplay = TextDisplay(content="[Clyde](https://github.com/EthanC/Clyde) says hi!")
@@ -82,6 +84,8 @@ relay.add_component(actions)
 relay.execute()
 ```
 
+![Preview](/assets/readme_example_components.png)
+
 **Send a Message with an Embed**
 
 ```py
@@ -90,7 +94,7 @@ from clyde import Embed, Webhook
 
 relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
 
-relay.set_avatar_url("https://website.com/image_file.png")
+relay.set_avatar_url("https://i.imgur.com/QaTHttz.png")
 relay.set_username("Shady")
 
 rich: Embed = Embed()
@@ -101,6 +105,8 @@ rich.set_color("#5865F2")
 relay.add_embed(rich)
 relay.execute()
 ```
+
+![Preview](/assets/readme_example_embed.png)
 
 ## Releases
 
@@ -115,4 +121,6 @@ Contributions are welcome—whether it’s fixing bugs or adding new features.
 
 ## Acknowledgements
 
-The Clyde character and Discord brand assets are owned by Discord. This project is not affiliated with or endorsed by Discord in any way.
+The Clyde character and Discord brand assets are owned by Discord.
+
+This project is not affiliated with or endorsed by Discord in any way.
