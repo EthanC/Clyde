@@ -24,7 +24,7 @@ jobs:
       - name: Run ruff
         run: uv run ruff check .
       - name: Run pytest
-        run: uv run pytest --cov=clyde tests/ --cov-report=xml
+        run: uv run pytest --cov --cov-branch --cov-report=xml
         env:
           TESTS_WEBHOOK_URL: ${{ secrets.TESTS_WEBHOOK_URL }}
       - name: Upload Coverage Report
