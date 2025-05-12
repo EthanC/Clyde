@@ -1,0 +1,21 @@
+site_name: Clyde
+
+theme:
+  name: material
+  palette:
+    primary: custom
+    accent: custom
+    scheme: slate
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+
+extra_css:
+  - stylesheets/extra.css

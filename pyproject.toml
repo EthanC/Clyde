@@ -1,0 +1,66 @@
+[project]
+name = "discord-clyde"
+version = "0.1.0"
+description = "A modern, type-hinted Python library for seamless interaction with the Discord Webhook API."
+readme = "README.md"
+authors = [
+    { name = "Ethan C", email = "16727756+EthanC@users.noreply.github.com" },
+]
+requires-python = ">=3.13"
+dependencies = ["pydantic>=2.11.4", "httpx>=0.28.1"]
+license = "AGPL-3.0"
+license-files = ["LICENSE"]
+keywords = ["discord", "webhook", "rest", "api", "library", "wrapper"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Repository = "https://github.com/EthanC/Clyde"
+Issues = "https://github.com/EthanC/Clyde/issues"
+Changelog = "https://github.com/EthanC/Clyde/releases"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.9",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "environs>=14.1.1",
+    "mkdocstrings[python]>=0.29.1",
+    "mkdocs-material>=9.6.13",
+]
+
+[tool.ruff]
+fix = true
+show-fixes = true
+
+[tool.ruff.format]
+docstring-code-format = true
+line-ending = "lf"
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint]
+select = ["I", "D"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*.py" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
+
+[tool.pytest.ini_options]
+xfail_strict = true
+log_cli = true
+log_cli_level = "DEBUG"
+
+[tool.hatch.build.targets.wheel]
+packages = ["clyde"]
