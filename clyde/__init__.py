@@ -16,7 +16,12 @@ from clyde.embed import (
 from clyde.markdown import Markdown
 from clyde.poll import Poll, PollAnswer, PollMediaAnswer, PollMediaQuestion
 from clyde.timestamp import Timestamp, TimestampStyles
-from clyde.webhook import AllowedMentions, AllowedMentionTypes, Webhook
+from clyde.webhook import (
+    AllowedMentions,
+    AllowedMentionTypes,
+    TopLevelComponent,
+    Webhook,
+)
 
 __all__: list[str] = [
     "Component",
@@ -33,6 +38,7 @@ __all__: list[str] = [
     "PollMediaQuestion",
     "Timestamp",
     "TimestampStyles",
+    "TopLevelComponent",
     "AllowedMentions",
     "AllowedMentionTypes",
     "Webhook",
