@@ -175,7 +175,12 @@ class Markdown:
         Returns:
             content (str): Content formatted as subtext.
         """
-        return f"-# {content}"
+        result: str = ""
+
+        for line in content.splitlines():
+            result += f"#- {line}\n"
+
+        return result.strip()
 
     @staticmethod
     def masked_link(content: str, url: str) -> str:
