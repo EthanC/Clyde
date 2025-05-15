@@ -52,22 +52,22 @@ class Markdown:
         return f"~~{content}~~"
 
     @staticmethod
-    def block_quote(content: str) -> str:
+    def block_quote(content: str, multi_line: bool = True) -> str:
         """
         Format the provided content as a block quote.
 
         Arguments:
             content (str): The content to format.
 
+            multi_line (bool): Whether to use a multi-line block quote. Default is True.
+
         Returns:
             content (str): Content formatted as a block quote.
         """
-        result: str = ""
-
-        for line in content.splitlines():
-            result += f"> {line}\n"
-
-        return result.strip()
+        if multi_line:
+            return f">>> {content}"
+        else:
+            return f"> {content}"
 
     @staticmethod
     def inline_code(content: str) -> str:
