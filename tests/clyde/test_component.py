@@ -103,6 +103,9 @@ def test_component_container() -> None:
     container.add_component(body)
     webhook.add_component(container)
 
+    container.add_component(TextDisplay(content=STRING_EXTRA_LONG))
+    container.remove_component(-1)
+
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.is_success
@@ -194,8 +197,17 @@ def test_component_section() -> None:
 
     section.add_component(TextDisplay(content=STRING_SHORT))
     section.add_component(TextDisplay(content=STRING_MEDIUM))
+
+    bad_text: TextDisplay = TextDisplay(content=STRING_EXTRA_LONG)
+    section.add_component(bad_text)
+    section.remove_component(bad_text)
+
     section.add_component(TextDisplay(content=STRING_LONG))
+
+    section.set_accessory(LinkButton(label=STRING_EXTRA_SHORT, url=STRING_URL_DISCORD))
+    section.remove_accessory()
     section.set_accessory(LinkButton(label=STRING_EXTRA_SHORT, url=STRING_URL_GITHUB))
+
     webhook.add_component(section)
 
     res: Response = webhook.execute()
