@@ -74,6 +74,39 @@ class Container(Component):
 
         return self
 
+    def remove_component(
+        self: Self,
+        component: ContainerComponent | list[ContainerComponent] | int | None,
+    ) -> "Container":
+        """
+        Remove a Component from the Section instance.
+
+        Arguments:
+            component (ContainerComponent | list[ContainerComponent] | int | None): A Component,
+                list of Components, or an index to remove. If set to None, all Components
+                are removed.
+
+        Returns:
+            self (Container): The modified Container instance.
+        """
+        if self.components:
+            if component:
+                if isinstance(component, list):
+                    for entry in component:
+                        self.components.remove(entry)
+                elif isinstance(component, int):
+                    self.components.pop(component)
+                else:
+                    self.components.remove(component)
+
+                # Do not retain an empty list
+                if len(self.components) == 0:
+                    self.components = None
+            else:
+                self.components = None
+
+        return self
+
     def set_accent_color(self: Self, accent_color: str | int | None) -> "Container":
         """
         Set the color for the accent on the Container.
