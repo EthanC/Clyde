@@ -178,7 +178,7 @@ class Markdown:
         result: str = ""
 
         for line in content.splitlines():
-            result += f"#- {line}\n"
+            result += f"-# {line}\n"
 
         return result.strip()
 
