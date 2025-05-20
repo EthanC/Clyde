@@ -178,6 +178,13 @@ class Markdown:
         result: str = ""
 
         for line in content.splitlines():
+            line = line.strip()
+
+            if line == "":
+                result += "\n"
+
+                continue
+
             result += f"-# {line}\n"
 
         return result.strip()

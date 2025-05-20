@@ -17,6 +17,7 @@ from .constants import (
     STRING_LIST_MEDIUM,
     STRING_LIST_SHORT,
     STRING_LONG,
+    STRING_LONG_MARKDOWN,
     STRING_MEDIUM,
     STRING_SHORT,
     STRING_URL_GITHUB,
@@ -245,7 +246,7 @@ def test_webhook_markdown() -> None:
 
     content: str = ""
 
-    content += Markdown.block_quote(STRING_MEDIUM) + "\n"
+    content += Markdown.block_quote(STRING_MEDIUM, multi_line=False) + "\n"
     content += Markdown.bold(STRING_EXTRA_SHORT) + "\n"
     content += Markdown.bulleted_list(STRING_LIST_SHORT) + "\n"
     content += Markdown.code_block(STRING_LONG) + "\n"
@@ -260,6 +261,7 @@ def test_webhook_markdown() -> None:
     content += Markdown.strikethrough(STRING_SHORT) + "\n"
     content += Markdown.subtext(STRING_MEDIUM) + "\n"
     content += Markdown.underline(STRING_SHORT) + "\n"
+    content += Markdown.subtext(STRING_LONG_MARKDOWN) + "\n"
 
     webhook.set_content(content=content)
 

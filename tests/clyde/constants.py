@@ -27,7 +27,7 @@ STRING_LONG: Final[str] = (
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 )
 STRING_LONG_MARKDOWN: Final[str] = (
-    "Lorem ipsum dolor sit amet, **consectetur adipiscing elit**, sed do eiusmod tempor ||incididunt|| ut labore et dolore _magna aliqua_. Ut enim ad minim veniam, quis `nostrud` exercitation ullamco laboris nisi ut aliquip ex ea commodo `consequat`. Duis aute irure dolor in :smiling_face_with_tear: reprehenderit **in** voluptate velit esse cillum dolore eu fugiat nulla pariatur. *Excepteur sint* occaecat __cupidatat__ non proident, sunt in culpa __**qui**__ officia deserunt mollit anim id est laborum."
+    "Lorem ipsum dolor sit amet, **consectetur adipiscing elit**, sed do eiusmod tempor ||incididunt|| ut labore et dolore _magna aliqua_.\nUt enim ad minim veniam, quis `nostrud` exercitation ullamco laboris nisi ut aliquip ex ea commodo `consequat`.\n\nDuis aute irure dolor in :smiling_face_with_tear: reprehenderit **in** voluptate velit esse cillum dolore eu fugiat nulla pariatur. *Excepteur sint* occaecat __cupidatat__ non proident, sunt in culpa __**qui**__ officia deserunt mollit anim id est laborum."
 )
 STRING_EXTRA_LONG: Final[str] = STRING_LONG * 10
 STRING_ID_USER: Final[str] = "264915286962995210"
