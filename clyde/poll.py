@@ -1,26 +1,25 @@
 """Define the Poll class and its associates."""
 
-from datetime import datetime
 from enum import IntEnum
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+import msgspec
+from msgspec import UNSET, Meta, Struct, UnsetType
 
 
-class PollMediaQuestion(BaseModel):
+class PollMediaQuestion(Struct, kw_only=True):
     """
     Represent a Poll Media object for a question.
 
     https://discord.com/developers/docs/resources/poll#poll-media-object-poll-media-object-structure
 
     Attributes:
-        text (str | None): The text of the field.
+        text (UnsetType | str): The text of the field.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Poll class."""
-
-    text: str | None = Field(default=None, max_length=300)
+    text: UnsetType | Annotated[str, Meta(min_length=1, max_length=300)] = (
+        msgspec.field(default=UNSET)
+    )
     """The text of the field."""
 
     def set_text(self: Self, text: str) -> "PollMediaQuestion":
@@ -37,34 +36,44 @@ class PollMediaQuestion(BaseModel):
 
         return self
 
+    def remove_text(self: Self) -> "PollMediaQuestion":
+        """
+        Remove the text from the Poll Media.
 
-class PollMediaAnswer(BaseModel):
+        Returns:
+            self (PollMediaQuestion): The modified Poll Media instance.
+        """
+        self.text = UNSET
+
+        return self
+
+
+class PollMediaAnswer(Struct, kw_only=True):
     """
     Represent a Poll Media object for an answer.
 
     https://discord.com/developers/docs/resources/poll#poll-media-object-poll-media-object-structure
 
     Attributes:
-        text (str | None): The text of the field.
+        text (UnsetType | str): The text of the field.
 
-        emoji (str | None): The emoji of the field.
+        emoji (UnsetType | str): The emoji of the field.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Poll class."""
-
-    text: str | None = Field(default=None, max_length=55)
+    text: UnsetType | Annotated[str, Meta(min_length=1, max_length=55)] = msgspec.field(
+        default=UNSET
+    )
     """The text of the field."""
 
-    emoji: str | None = Field(default=None)
+    emoji: UnsetType | str = msgspec.field(default=UNSET)
     """The emoji of the field."""
 
-    def set_text(self: Self, text: str | None) -> "PollMediaAnswer":
+    def set_text(self: Self, text: str) -> "PollMediaAnswer":
         """
         Set the text of the Poll Media.
 
         Arguments:
-            text (str | None): The text of the field. If set to None, the text is cleared.
+            text (str): The text of the field.
 
         Returns:
             self (PollMediaAnswer): The modified Poll Media instance.
@@ -73,12 +82,23 @@ class PollMediaAnswer(BaseModel):
 
         return self
 
-    def set_emoji(self: Self, emoji: str | None) -> "PollMediaAnswer":
+    def remove_text(self: Self) -> "PollMediaAnswer":
+        """
+        Remove the text from the Poll Media.
+
+        Returns:
+            self (PollMediaAnswer): The modified Poll Media instance.
+        """
+        self.text = UNSET
+
+        return self
+
+    def set_emoji(self: Self, emoji: str) -> "PollMediaAnswer":
         """
         Set the emoji of the Poll Media.
 
         Arguments:
-            emoji (str | None): The emoji of the field. If set to None, the emoji is cleared.
+            emoji (str): The emoji of the field.
 
         Returns:
             self (PollMediaAnswer): The modified Poll Media instance.
@@ -87,8 +107,19 @@ class PollMediaAnswer(BaseModel):
 
         return self
 
+    def remove_emoji(self: Self) -> "PollMediaAnswer":
+        """
+        Remove the emoji from the Poll Media.
 
-class PollAnswer(BaseModel):
+        Returns:
+            self (PollMediaAnswer): The modified Poll Media instance.
+        """
+        self.emoji = UNSET
+
+        return self
+
+
+class PollAnswer(Struct, kw_only=True):
     """
     Represent a Poll Answer object.
 
@@ -98,10 +129,7 @@ class PollAnswer(BaseModel):
         poll_media (PollMediaAnswer): The data of the answer.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Poll class."""
-
-    poll_media: PollMediaAnswer | None = None
+    poll_media: PollMediaAnswer = msgspec.field()
     """The data of the answer."""
 
     def set_poll_media(self: Self, poll_media: PollMediaAnswer) -> "PollAnswer":
@@ -133,41 +161,42 @@ class LayoutType(IntEnum):
     """The default layout type."""
 
 
-class Poll(BaseModel):
+class Poll(Struct, kw_only=True):
     """
     Represent a Discord Poll object.
 
-    https://discord.com/developers/docs/resources/poll#poll-create-request-object
+    https://discord.com/developers/docs/resources/poll#poll-create-request-object-poll-create-request-object-structure
 
     Attributes:
         question (PollMediaQuestion): The question of the poll.
 
         answers (list[PollAnswer]): Each of the answers available in the poll.
 
-        expiry (int | float | datetime | None): The time when the poll ends.
+        duration (UnsetType | int): Number of hours the poll should be open for, up to
+            32 days. Defaults to 24.
 
-        allow_multiselect (bool | None): Whether a user can select multiple answers.
+        allow_multiselect (UnsetType | bool): Whether a user can select multiple answers.
 
-        layout_type (LayoutType): The value of LayoutType.DEFAULT.
+        layout_type (UnsetType | LayoutType): The layout type of the poll. Defaults
+            to LayoutType.DEFAULT.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Poll class."""
-
-    question: PollMediaQuestion | None = Field(default=None)
+    question: PollMediaQuestion = msgspec.field()
     """The question of the poll."""
 
-    answers: list[PollAnswer] | None = Field(default=None, max_length=10)
+    answers: Annotated[list[PollAnswer], Meta(min_length=1, max_length=10)] = (
+        msgspec.field()
+    )
     """Each of the answers available in the poll."""
 
-    expiry: int | float | datetime | None = Field(default=None)
-    """The time when the poll ends."""
+    duration: UnsetType | int = msgspec.field(default=UNSET)
+    """Number of hours the poll should be open for, up to 32 days. Defaults to 24."""
 
-    allow_multiselect: bool | None = Field(default=None)
+    allow_multiselect: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether a user can select multiple answers."""
 
-    layout_type: int = Field(default=LayoutType.DEFAULT, frozen=True)
-    """The value of LayoutType.DEFAULT."""
+    layout_type: UnsetType | LayoutType = msgspec.field(default=UNSET)
+    """The layout type of the poll. Defaults to LayoutType.DEFAULT."""
 
     def set_question(self: Self, question: PollMediaQuestion) -> "Poll":
         """
@@ -204,56 +233,70 @@ class Poll(BaseModel):
 
         return self
 
-    def remove_answer(
-        self: Self, answer: PollAnswer | list[PollAnswer] | None
-    ) -> "Poll":
+    def remove_answer(self: Self, answer: PollAnswer | list[PollAnswer]) -> "Poll":
         """
         Remove one or more answers from the Poll.
 
         Arguments:
-            answer (PollAnswer | list[PollAnswer] | None): An answer or list of answers to
-                remove. If set to None, all answers are removed.
+            answer (PollAnswer | list[PollAnswer]): An answer or list of answers to
+                remove.
 
         Returns:
             self (Poll): The modified Poll instance.
         """
-        if self.answers:
-            if not answer:
-                self.answers = None
-            elif isinstance(answer, list):
-                for entry in answer:
-                    self.answers.remove(entry)
-            else:
-                self.answers.remove(answer)
+        if isinstance(answer, PollAnswer):
+            self.answers.remove(answer)
+        else:
+            self.answers = [entry for entry in self.answers if entry not in answer]
 
         return self
 
-    def set_expiry(self: Self, expiry: int | float | datetime | None) -> "Poll":
+    def set_duration(self: Self, duration: int) -> "Poll":
         """
-        Set the time when the Poll ends.
+        Set the number of hours the Poll should be open for.
 
         Arguments:
-            expiry (int | float | datetime | None): The time when the Poll ends. If set
-                to None, the expiry is cleared.
+            duration (int): Number of hours, up to 32 days.
 
         Returns:
             self (Poll): The modified Poll instance.
         """
-        self.expiry = expiry
+        self.duration = duration
 
         return self
 
-    def set_allow_multiselect(self: Self, allow_multiselect: bool | None) -> "Poll":
+    def remove_duration(self: Self) -> "Poll":
+        """
+        Remove the number of hours the Poll should be open for.
+
+        Returns:
+            self (Poll): The modified Poll instance.
+        """
+        self.duration = UNSET
+
+        return self
+
+    def set_allow_multiselect(self: Self, allow_multiselect: bool) -> "Poll":
         """
         Set whether a user can select multiple answers on the Poll.
 
         Arguments:
-            allow_multiselect (bool | None): Whether the user can select multiple answers.
-                If set to None, allow_multiselect is cleared.
+            allow_multiselect (bool): Whether the user can select multiple answers.
 
         Returns:
             self (Poll): The modified Poll instance.
         """
         self.allow_multiselect = allow_multiselect
+
+        return self
+
+    def remove_allow_multiselect(self: Self) -> "Poll":
+        """
+        Remove whether a user can select multiple answers on the Poll.
+
+        Returns:
+            self (Poll): The modified Poll instance.
+        """
+        self.allow_multiselect = UNSET
 
         return self

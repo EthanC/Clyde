@@ -2,12 +2,11 @@
 
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import msgspec
+from msgspec import UNSET, Struct, UnsetType
 
-from clyde.validation import Validation
 
-
-class UnfurledMediaItem(BaseModel):
+class UnfurledMediaItem(Struct, kw_only=True):
     """
     Represent an Unfurled Media Item structure.
 
@@ -17,10 +16,7 @@ class UnfurledMediaItem(BaseModel):
         url (str): Supports arbitrary URLs and attachment://<filename> references.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Unfurled Media Item class."""
-
-    url: str | None = Field(default=None)
+    url: UnsetType | str = msgspec.field(default=UNSET)
     """Supports arbitrary URLs and attachment://<filename> references."""
 
     def set_url(self: Self, url: str) -> "UnfurledMediaItem":
@@ -36,17 +32,3 @@ class UnfurledMediaItem(BaseModel):
         self.url = url
 
         return self
-
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str:
-        """
-        Validate the value of URL for an Unfurled Media Item.
-
-        Arguments:
-            url (str): The value to validate.
-
-        Returns:
-            url (str): The validated URL value.
-        """
-        return Validation.validate_url_scheme(url, ["http", "https", "attachment"])

@@ -2,12 +2,12 @@
 
 from typing import Self
 
-from pydantic import Field
+import msgspec
 
 from clyde.component import Component, ComponentTypes
 
 
-class TextDisplay(Component):
+class TextDisplay(Component, kw_only=True):
     """
     Represent a Discord Component of the Text Display type.
 
@@ -24,10 +24,10 @@ class TextDisplay(Component):
         content (str): Text that will be displayed similar to a message.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.TEXT_DISPLAY, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.TEXT_DISPLAY)
     """The value of ComponentTypes.TEXT_DISPLAY."""
 
-    content: str | None = Field(default=None)
+    content: str = msgspec.field()
     """Text that will be displayed similar to a message."""
 
     def set_content(self: Self, content: str) -> "TextDisplay":

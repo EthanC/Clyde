@@ -1,14 +1,15 @@
 """Define the Action Row class and its associates."""
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field
+import msgspec
+from msgspec import Meta
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.button import LinkButton
 
 
-class ActionRow(Component):
+class ActionRow(Component, kw_only=True):
     """
     Represent a Discord Component of the Action Row type.
 
@@ -23,10 +24,12 @@ class ActionRow(Component):
         components (list[LinkButton]): Up to 5 interactive Link Button Components.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.ACTION_ROW, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.ACTION_ROW)
     """The value of ComponentTypes.ACTION_ROW."""
 
-    components: list[LinkButton] | None = Field(default=None, max_length=5)
+    components: Annotated[list[LinkButton], Meta(min_length=1, max_length=5)] = (
+        msgspec.field()
+    )
     """Up to 5 interactive Link Button Components."""
 
     def add_component(
@@ -42,12 +45,33 @@ class ActionRow(Component):
         Returns:
             self (ActionRow): The modified Action Row instance.
         """
-        if not self.components:
-            self.components = []
-
-        if isinstance(component, list):
-            self.components.extend(component)
-        else:
+        if isinstance(component, LinkButton):
             self.components.append(component)
+        else:
+            self.components.extend(component)
+
+        return self
+
+    def remove_component(
+        self: Self, component: LinkButton | list[LinkButton] | int
+    ) -> "ActionRow":
+        """
+        Remove one or more Link Button Components from the Action Row.
+
+        Arguments:
+            component (LinkButton | list[LinkButton] | int): A Link Button, list of Link Buttons,
+                or an index to remove from the Action Row.
+
+        Returns:
+            self (ActionRow): The modified Action Row instance.
+        """
+        if isinstance(component, LinkButton):
+            self.components.remove(component)
+        elif isinstance(component, int):
+            self.components.pop(component)
+        else:
+            self.components = [
+                entry for entry in self.components if entry not in component
+            ]
 
         return self

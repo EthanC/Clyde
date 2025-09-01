@@ -2,14 +2,14 @@
 
 from typing import Self
 
-from pydantic import Field, field_validator
+import msgspec
+from msgspec import UNSET, UnsetType
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
-from clyde.validation import Validation
 
 
-class File(Component):
+class File(Component, kw_only=True):
     """
     Represent a Discord Component of the File type.
 
@@ -29,26 +29,26 @@ class File(Component):
         spoiler (bool | None): Whether the media should be a spoiler (blurred).
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.FILE, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.FILE)
     """The value of ComponentTypes.FILE."""
 
-    file: UnfurledMediaItem | None = Field(default=None)
+    file: UnfurledMediaItem = msgspec.field()
     """
     This Unfurled Media Item is unique in that it only supports attachment references
     using the attachment://<filename> syntax.
     """
 
-    spoiler: bool | None = Field(default=None)
+    spoiler: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether the media should be a spoiler (blurred)."""
 
-    def set_file(self: Self, file: UnfurledMediaItem | str | None) -> "File":
+    def set_file(self: Self, file: UnfurledMediaItem | str) -> "File":
         """
         Set the file for this component.
 
         Arguments:
             file (UnfurledMediaItem | str): This Unfurled Media Item is unique in that
                 it only supports attachment references using the attachment://<filename>
-                syntax. If set to None, the File value is cleared.
+                syntax.
 
         Returns:
             self (File): The modified File instance.
@@ -60,13 +60,12 @@ class File(Component):
 
         return self
 
-    def set_spoiler(self: Self, spoiler: bool | None) -> "File":
+    def set_spoiler(self: Self, spoiler: bool) -> "File":
         """
         Set whether the File should be a spoiler (blurred).
 
         Arguments:
-            spoiler (bool): True if the File should be a spoiler (blurred). If set to
-                None, the Spoiler value is cleared.
+            spoiler (bool): True if the File should be a spoiler (blurred).
 
         Returns:
             self (File): The modified File instance.
@@ -75,18 +74,13 @@ class File(Component):
 
         return self
 
-    @field_validator("file", mode="after")
-    @classmethod
-    def _validate_file(cls, file: UnfurledMediaItem) -> UnfurledMediaItem:
+    def remove_spoiler(self: Self) -> "File":
         """
-        Validate the value of file for a File.
-
-        Arguments:
-            file (UnfurledMediaItem | str): The value to validate.
+        Remove whether the File should be a spoiler (blurred).
 
         Returns:
-            file (UnfurledMediaItem): The validated file value.
+            self (File): The modified File instance.
         """
-        return UnfurledMediaItem(
-            url=Validation.validate_url_scheme(file.url, ["attachment"])
-        )
+        self.spoiler = UNSET
+
+        return self

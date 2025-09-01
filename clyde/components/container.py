@@ -1,8 +1,9 @@
 """Define the Container class and its associates."""
 
-from typing import Self, TypeAlias
+from typing import Annotated, Self, TypeAlias
 
-from pydantic import Field, field_validator
+import msgspec
+from msgspec import UNSET, Meta, UnsetType
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.action_row import ActionRow
@@ -11,14 +12,13 @@ from clyde.components.media_gallery import MediaGallery
 from clyde.components.section import Section
 from clyde.components.seperator import Seperator
 from clyde.components.text_display import TextDisplay
-from clyde.validation import Validation
 
 ContainerComponent: TypeAlias = (
     ActionRow | TextDisplay | Section | MediaGallery | Seperator | File
 )
 
 
-class Container(Component):
+class Container(Component, kw_only=True):
     """
     Represent a Discord Component of the Container type.
 
@@ -38,16 +38,18 @@ class Container(Component):
         spoiler (bool | None): Whether the Container should be a spoiler (blurred).
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.CONTAINER, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.CONTAINER)
     """The value of ComponentTypes.CONTAINER."""
 
-    components: list[ContainerComponent] | None = Field(default=None)
+    components: Annotated[list[ContainerComponent], Meta(min_length=1)] = (
+        msgspec.field()
+    )
     """Components of the type Action Row, Text Display, Section, Media Gallery, Separator, or File"""
 
-    accent_color: str | int | None = Field(default=None)
+    accent_color: UnsetType | str | int = msgspec.field(default=UNSET)
     """Color for the accent on the Container."""
 
-    spoiler: bool | None = Field(default=None)
+    spoiler: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether the Container should be a spoiler (blurred)."""
 
     def add_component(
@@ -64,57 +66,44 @@ class Container(Component):
         Returns:
             self (Container): The modified Container instance.
         """
-        if not self.components:
-            self.components = []
-
-        if isinstance(component, list):
-            self.components.extend(component)
-        else:
+        if isinstance(component, ContainerComponent):
             self.components.append(component)
+        else:
+            self.components.extend(component)
 
         return self
 
     def remove_component(
-        self: Self,
-        component: ContainerComponent | list[ContainerComponent] | int | None,
+        self: Self, component: ContainerComponent | list[ContainerComponent] | int
     ) -> "Container":
         """
         Remove a Component from the Section instance.
 
         Arguments:
             component (ContainerComponent | list[ContainerComponent] | int | None): A Component,
-                list of Components, or an index to remove. If set to None, all Components
-                are removed.
+                list of Components, or an index to remove.
 
         Returns:
             self (Container): The modified Container instance.
         """
-        if self.components:
-            if component:
-                if isinstance(component, list):
-                    for entry in component:
-                        self.components.remove(entry)
-                elif isinstance(component, int):
-                    self.components.pop(component)
-                else:
-                    self.components.remove(component)
-
-                # Do not retain an empty list
-                if len(self.components) == 0:
-                    self.components = None
-            else:
-                self.components = None
+        if isinstance(component, ContainerComponent):
+            self.components.remove(component)
+        elif isinstance(component, int):
+            self.components.pop(component)
+        else:
+            self.components = [
+                entry for entry in self.components if entry not in component
+            ]
 
         return self
 
-    def set_accent_color(self: Self, accent_color: str | int | None) -> "Container":
+    def set_accent_color(self: Self, accent_color: str | int) -> "Container":
         """
         Set the color for the accent on the Container.
 
         Arguments:
             accent_color (str | int): A color, represented as a hexadecimal string
-                or an integer, for the accent on the Container. If set to None, the
-                accent_color is cleared.
+                or an integer, for the accent on the Container.
 
         Returns:
             self (Container): The modified Container instance.
@@ -123,13 +112,23 @@ class Container(Component):
 
         return self
 
-    def set_spoiler(self: Self, spoiler: bool | None) -> "Container":
+    def remove_accent_color(self: Self) -> "Container":
+        """
+        Remove the color for the accent from the Container.\
+
+        Returns:
+            self (Container): The modified Container instance.
+        """
+        self.accent_color = UNSET
+
+        return self
+
+    def set_spoiler(self: Self, spoiler: bool) -> "Container":
         """
         Set whether the Container should be a spoiler (blurred).
 
         Arguments:
-            spoiler (bool): True if the Container should be a spoiler (blurred). If set
-                to None, the spoiler value is cleared.
+            spoiler (bool): True if the Container should be a spoiler (blurred).
 
         Returns:
             self (Container): The modified Container instance.
@@ -138,16 +137,13 @@ class Container(Component):
 
         return self
 
-    @field_validator("accent_color", mode="after")
-    @classmethod
-    def _validate_accent_color(cls, accent_color: str | int) -> str | int:
+    def remove_spoiler(self: Self) -> "Container":
         """
-        Validate the value of accent_color for a Container.
-
-        Arguments:
-            accent_color (str | int): The value to validate.
+        Remove whether the Container should be a spoiler (blurred).
 
         Returns:
-            accent_color (int): The validated accent_color value.
+            self (Container): The modified Container instance.
         """
-        return Validation.validate_color(accent_color)
+        self.spoiler = UNSET
+
+        return self

@@ -24,8 +24,10 @@ from .constants import (
     STRING_URL_ICON_1,
     STRING_URL_ICON_2,
     STRING_URL_ICON_4,
+    STRING_URL_IMAGE_1,
     STRING_URL_IMAGE_4,
     STRING_URL_WEBHOOK,
+    STRING_WORD,
 )
 
 
@@ -38,10 +40,10 @@ def delay() -> None:
 def test_embed() -> None:
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
     embed: Embed = Embed()
-    footer: EmbedFooter = EmbedFooter()
-    image: EmbedImage = EmbedImage()
-    thumbnail: EmbedThumbnail = EmbedThumbnail()
-    author: EmbedAuthor = EmbedAuthor()
+    footer: EmbedFooter = EmbedFooter(text=STRING_SHORT)
+    image: EmbedImage = EmbedImage(url=STRING_URL_ICON_1)
+    thumbnail: EmbedThumbnail = EmbedThumbnail(url=STRING_URL_IMAGE_1)
+    author: EmbedAuthor = EmbedAuthor(name=STRING_WORD)
 
     embed.set_title(STRING_SHORT)
     embed.set_description(STRING_LONG_MARKDOWN)

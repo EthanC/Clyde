@@ -1,12 +1,12 @@
 """Define the Button class and its associates."""
 
 from enum import IntEnum
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, field_validator
+import msgspec
+from msgspec import Meta
 
 from clyde.component import Component, ComponentTypes
-from clyde.validation import Validation
 
 
 class ButtonStyles(IntEnum):
@@ -23,7 +23,7 @@ class ButtonStyles(IntEnum):
     """Navigates to a URL."""
 
 
-class Button(Component):
+class Button(Component, kw_only=True):
     """
     Represent a Button, an interactive Component that can only be used in messages.
 
@@ -38,10 +38,10 @@ class Button(Component):
         style (ButtonStyles): A Button Style.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.BUTTON, frozen=True)
+    type: ComponentTypes
     """The value of ComponentTypes.BUTTON."""
 
-    style: ButtonStyles = Field(...)
+    style: ButtonStyles
     """A Button Style."""
 
     def set_style(self: Self, style: ButtonStyles) -> "Button":
@@ -59,7 +59,7 @@ class Button(Component):
         return self
 
 
-class LinkButton(Button):
+class LinkButton(Button, kw_only=True):
     """
     Represent a Button Component navigates to a URL.
 
@@ -73,13 +73,16 @@ class LinkButton(Button):
         url (str): URL for link-style Buttons.
     """
 
-    style: ButtonStyles = Field(default=ButtonStyles.LINK, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.BUTTON)
+    """The value of ComponentTypes.BUTTON."""
+
+    style: ButtonStyles = msgspec.field(default=ButtonStyles.LINK)
     """The value of ButtonStyles.LINK."""
 
-    label: str | None = Field(default=None, max_length=80)
+    label: Annotated[str, Meta(min_length=1, max_length=80)] = msgspec.field()
     """Text that appears on the Button; max 80 characters."""
 
-    url: str | None = Field(default=None)
+    url: str = msgspec.field()
     """URL for link-style Buttons."""
 
     def set_label(self: Self, label: str) -> "LinkButton":
@@ -109,17 +112,3 @@ class LinkButton(Button):
         self.url = url
 
         return self
-
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str:
-        """
-        Validate the value of URL for a Link Button.
-
-        Arguments:
-            url (str): The value to validate.
-
-        Returns:
-            url (str): The validated URL value.
-        """
-        return Validation.validate_url_scheme(url, ["http", "https"])

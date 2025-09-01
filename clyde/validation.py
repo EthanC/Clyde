@@ -2,16 +2,14 @@
 
 from datetime import datetime
 
-from pydantic import AnyUrl
-
 
 class Validation:
     """Define static methods for reusable data validation and conversion."""
 
     @staticmethod
-    def validate_color(value: str | int) -> int:
+    def convert_color(value: str | int) -> int:
         """
-        Validate—and convert, if applicable—a color value for Discord.
+        Convert, if applicable, a color value for Discord.
 
         Arguments:
             value (str | int): The value to validate.
@@ -29,9 +27,9 @@ class Validation:
         return value
 
     @staticmethod
-    def validate_timestamp(value: int | float | str | datetime) -> str:
+    def convert_timestamp(value: int | float | str | datetime) -> str:
         """
-        Validate—and convert, if applicable—a timestamp value for Discord.
+        Convert, if applicable, a timestamp value for Discord.
 
         Arguments:
             value (int | float | str | datetime): The value to validate.
@@ -64,14 +62,6 @@ class Validation:
         if not value:
             raise ValueError(
                 f"Empty URL is not valid for scheme(s) {', '.join(valid_scheme)}"
-            )
-
-        scheme: str = AnyUrl(value).scheme.lower()
-        valid_scheme = [_scheme.lower() for _scheme in valid_scheme]
-
-        if scheme not in valid_scheme:
-            raise ValueError(
-                f"URL {value} is not valid for scheme(s) {', '.join(valid_scheme)}"
             )
 
         return value

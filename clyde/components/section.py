@@ -1,8 +1,9 @@
 """Define the Section class and its associates."""
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field
+import msgspec
+from msgspec import Meta
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.button import LinkButton
@@ -10,7 +11,7 @@ from clyde.components.text_display import TextDisplay
 from clyde.components.thumbnail import Thumbnail
 
 
-class Section(Component):
+class Section(Component, kw_only=True):
     """
     Represent a Discord Component of the Section type.
 
@@ -27,13 +28,15 @@ class Section(Component):
         accessory (Thumbnail | LinkButton): A Thumbnail or a Link Button Component.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.SECTION, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.SECTION)
     """The value of ComponentTypes.SECTION."""
 
-    components: list[TextDisplay] | None = Field(default=None, max_length=3)
+    components: Annotated[list[TextDisplay], Meta(min_length=1, max_length=3)] = (
+        msgspec.field()
+    )
     """1-3 Text Display Components."""
 
-    accessory: Thumbnail | LinkButton | None = Field(default=None)
+    accessory: Thumbnail | LinkButton = msgspec.field()
     """A Thumbnail or a Link Button Component."""
 
     def add_component(
@@ -49,72 +52,48 @@ class Section(Component):
         Returns:
             self (Section): The modified Section instance.
         """
-        if not self.components:
-            self.components = []
-
-        if isinstance(component, list):
-            self.components.extend(component)
-        else:
+        if isinstance(component, TextDisplay):
             self.components.append(component)
+        else:
+            self.components.extend(component)
 
         return self
 
     def remove_component(
-        self: Self, component: TextDisplay | list[TextDisplay] | int | None
+        self: Self, component: TextDisplay | list[TextDisplay] | int
     ) -> "Section":
         """
         Remove a Component from the Section instance.
 
         Arguments:
-            component (TextDisplay | list[TextDisplay] | int | None): A Component, list
-                of Components, or an index to remove. If set to None, all Components
-                are removed.
+            component (TextDisplay | list[TextDisplay] | int): A Component, list of
+                Components, or an index to remove.
 
         Returns:
             self (Section): The modified Section instance.
         """
-        if self.components:
-            if component:
-                if isinstance(component, list):
-                    for entry in component:
-                        self.components.remove(entry)
-                elif isinstance(component, int):
-                    self.components.pop(component)
-                else:
-                    self.components.remove(component)
-
-                # Do not retain an empty list
-                if len(self.components) == 0:
-                    self.components = None
-            else:
-                self.components = None
+        if isinstance(component, TextDisplay):
+            self.components.remove(component)
+        elif isinstance(component, int):
+            self.components.pop(component)
+        else:
+            self.components = [
+                entry for entry in self.components if entry not in component
+            ]
 
         return self
 
-    def set_accessory(
-        self: Self, accessory: Thumbnail | LinkButton | None
-    ) -> "Section":
+    def set_accessory(self: Self, accessory: Thumbnail | LinkButton) -> "Section":
         """
         Set the Accessory Component on the Section instance.
 
         Arguments:
             accessory (Thumbnail | LinkButton): A Thumbnail or Link Button Component to
-                set on the Section. If set to None, the Accessory value is cleared.
+                set on the Section.
 
         Returns:
             self (Section): The modified Section instance.
         """
         self.accessory = accessory
-
-        return self
-
-    def remove_accessory(self: Self) -> "Section":
-        """
-        Remove the Accessory Component from the Section instance.
-
-        Returns:
-            self (Section): The modified Section instance.
-        """
-        self.accessory = None
 
         return self

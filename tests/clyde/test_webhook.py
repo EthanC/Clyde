@@ -37,7 +37,7 @@ def test_webhook() -> None:
     A test case to validate the creation of an empty Webhook instance.
     """
 
-    assert Webhook()
+    assert Webhook(url=STRING_URL_WEBHOOK)
 
 
 def test_webhook_execute() -> None:
@@ -64,20 +64,6 @@ def test_webhook_execute_fail() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to empty string
-    assert isinstance(res, Response) and res.is_success
-
-
-def test_webhook_set_url() -> None:
-    """
-    A test-case to validate the successful use and execution of set_url on a Webhook instance.
-    """
-
-    webhook: Webhook = Webhook(content=STRING_LONG)
-
-    webhook.set_url(STRING_URL_WEBHOOK)
-
-    res: Response = webhook.execute()
-
     assert isinstance(res, Response) and res.is_success
 
 
@@ -142,9 +128,7 @@ def test_webhook_set_allowed_mentions() -> None:
     A test-case to validate the successful use and execution of set_allowed_mentions on a Webhook instance.
     """
 
-    webhook: Webhook = Webhook(
-        url=STRING_URL_WEBHOOK, content=f"<@{STRING_ID_USER}> " + STRING_SHORT
-    )
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=f"<@{STRING_ID_USER}> " + STRING_SHORT)
     mentions: AllowedMentions = AllowedMentions()
 
     mentions.add_parse(AllowedMentionTypes.USER_MENTIONS)
@@ -194,9 +178,7 @@ def test_webhook_set_flag() -> None:
     A test-case to validate the successful use and execution of set_flag on a Webhook instance.
     """
 
-    webhook: Webhook = Webhook(
-        url=STRING_URL_WEBHOOK, content=f"<@{STRING_ID_USER}> " + STRING_SHORT
-    )
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=f"<@{STRING_ID_USER}> " + STRING_SHORT)
 
     webhook.set_flag(MessageFlags.SUPPRESS_NOTIFICATIONS, True)
     webhook.set_flag(MessageFlags.SUPPRESS_EMBEDS, True)
@@ -263,7 +245,7 @@ def test_webhook_markdown() -> None:
     content += Markdown.underline(STRING_SHORT) + "\n"
     content += Markdown.subtext(STRING_LONG_MARKDOWN) + "\n"
 
-    webhook.set_content(content=content)
+    webhook.set_content(content)
 
     res: Response = webhook.execute()
 

@@ -2,7 +2,8 @@
 
 from enum import IntEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+import msgspec
+from msgspec import Struct
 
 
 class ComponentTypes(IntEnum):
@@ -59,7 +60,7 @@ class ComponentTypes(IntEnum):
     """Container that visually groups a set of Components."""
 
 
-class Component(BaseModel):
+class Component(Struct, kw_only=True):
     """
     Represent a Discord Component.
 
@@ -72,8 +73,5 @@ class Component(BaseModel):
         type (ComponentTypes): The type of the Component.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Component class."""
-
-    type: ComponentTypes = Field(...)
+    type: ComponentTypes = msgspec.field()
     """The type of the Component."""

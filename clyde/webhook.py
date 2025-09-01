@@ -2,11 +2,12 @@
 
 import logging
 from enum import IntEnum, StrEnum
-from typing import Literal, Self, TypeAlias
+from typing import Annotated, ClassVar, Literal, Self, TypeAlias
 
 import httpx
+import msgspec
 from httpx import AsyncClient, Response
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from msgspec import UNSET, Meta, Struct, UnsetType
 
 from clyde.components.action_row import ActionRow
 from clyde.components.container import Container
@@ -17,10 +18,12 @@ from clyde.components.seperator import Seperator
 from clyde.components.text_display import TextDisplay
 from clyde.embed import Embed
 from clyde.poll import Poll
+from clyde.validation import Validation
 
 TopLevelComponent: TypeAlias = (
     ActionRow | Container | File | MediaGallery | Section | Seperator | TextDisplay
 )
+TopLevelComponents: TypeAlias = list[TopLevelComponent]
 
 
 class AllowedMentionTypes(StrEnum):
@@ -47,7 +50,7 @@ class AllowedMentionTypes(StrEnum):
     """Controls @everyone and @here mentions."""
 
 
-class AllowedMentions(BaseModel):
+class AllowedMentions(Struct, kw_only=True):
     """
     Represent the Allowed Mentions object on a Discord message.
 
@@ -58,19 +61,20 @@ class AllowedMentions(BaseModel):
     https://discord.com/developers/docs/resources/message#allowed-mentions-object
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Webhook class."""
-
-    parse: list[AllowedMentionTypes] | None = Field(default=None)
+    parse: UnsetType | list[AllowedMentionTypes] = msgspec.field(default=UNSET)
     """An array of Allowed Mention Types to parse from the content."""
 
-    roles: list[str] | None = Field(default=None, max_length=100)
+    roles: UnsetType | Annotated[list[str], Meta(min_length=1, max_length=100)] = (
+        msgspec.field(default=UNSET)
+    )
     """Array of role_ids to mention (max size of 100)."""
 
-    users: list[str] | None = Field(default=None, max_length=100)
+    users: UnsetType | Annotated[list[str], Meta(min_length=1, max_length=100)] = (
+        msgspec.field(default=UNSET)
+    )
     """Array of user_ids to mention (max size of 100)."""
 
-    replied_user: bool | None = Field(default=None)
+    replied_user: UnsetType | bool = msgspec.field(default=UNSET)
     """For replies, whether to mention the author of the message being replied to."""
 
     def add_parse(
@@ -93,7 +97,7 @@ class AllowedMentions(BaseModel):
             # No need for ROLE_MENTIONS if we already have roles
             return self
 
-        if not self.parse:
+        if isinstance(self.parse, UnsetType):
             self.parse = []
 
         if isinstance(parse, list):
@@ -104,34 +108,29 @@ class AllowedMentions(BaseModel):
         return self
 
     def remove_parse(
-        self: Self, parse: AllowedMentionTypes | list[AllowedMentionTypes] | int | None
+        self: Self, parse: AllowedMentionTypes | list[AllowedMentionTypes] | int
     ) -> "AllowedMentions":
         """
         Remove an Allowed Mention Type from the Allowed Mentions instance.
 
         Arguments:
-            parse (AllowedMentionTypes | list[AllowedMentionTypes] | int | None): An Allowed
-                Mention Type, list of Allowed Mention Types, or an index to remove. If
-                set to None, the parse value is cleared.
+            parse (AllowedMentionTypes | list[AllowedMentionTypes] | int): An Allowed
+                Mention Type, list of Allowed Mention Types, or an index to remove.
 
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
         """
-        if self.parse:
-            if parse:
-                if isinstance(parse, list):
-                    for entry in parse:
-                        self.parse.remove(entry)
-                elif isinstance(parse, int):
-                    self.parse.pop(parse)
-                else:
-                    self.parse.remove(parse)
-
-                # Do not retain an empty list
-                if len(self.parse) == 0:
-                    self.parse = None
+        if isinstance(self.parse, list):
+            if isinstance(parse, AllowedMentionTypes):
+                self.parse.remove(parse)
+            elif isinstance(parse, int):
+                self.parse.pop(parse)
             else:
-                self.parse = None
+                self.parse = [entry for entry in self.parse if entry not in parse]
+
+            # Do not retain an empty list
+            if len(self.parse) == 0:
+                self.parse = UNSET
 
         return self
 
@@ -145,11 +144,14 @@ class AllowedMentions(BaseModel):
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
         """
-        if self.parse and AllowedMentionTypes.ROLE_MENTIONS in self.parse:
+        if (
+            isinstance(self.parse, list)
+            and AllowedMentionTypes.ROLE_MENTIONS in self.parse
+        ):
             # No need for role if we already have ROLE_MENTIONS
             return self
 
-        if not self.roles:
+        if isinstance(self.roles, UnsetType):
             self.roles = []
 
         if isinstance(role, list):
@@ -159,34 +161,28 @@ class AllowedMentions(BaseModel):
 
         return self
 
-    def remove_role(
-        self: Self, role: str | list[str] | int | None
-    ) -> "AllowedMentions":
+    def remove_role(self: Self, role: str | list[str] | int) -> "AllowedMentions":
         """
         Remove a role ID from the Allowed Mentions instance.
 
         Arguments:
-            role (str | list[str] | int | None): A role ID, list of role IDs, or an index
-                to remove. If set to None, the roles value is cleared.
+            role (str | list[str] | int): A role ID, list of role IDs, or an index
+                to remove.
 
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
         """
-        if self.roles:
-            if role:
-                if isinstance(role, list):
-                    for entry in role:
-                        self.roles.remove(entry)
-                elif isinstance(role, int):
-                    self.roles.pop(role)
-                else:
-                    self.roles.remove(role)
-
-                # Do not retain an empty list
-                if len(self.roles) == 0:
-                    self.roles = None
+        if isinstance(self.roles, list):
+            if isinstance(role, str):
+                self.roles.remove(role)
+            elif isinstance(role, int):
+                self.roles.pop(role)
             else:
-                self.roles = None
+                self.roles = [entry for entry in self.roles if entry not in role]
+
+            # Do not retain an empty list
+            if len(self.roles) == 0:
+                self.roles = UNSET
 
         return self
 
@@ -200,11 +196,14 @@ class AllowedMentions(BaseModel):
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
         """
-        if self.parse and AllowedMentionTypes.USER_MENTIONS in self.parse:
+        if (
+            isinstance(self.parse, list)
+            and AllowedMentionTypes.USER_MENTIONS in self.parse
+        ):
             # No need for user if we already have USER_MENTIONS
             return self
 
-        if not self.users:
+        if isinstance(self.users, UnsetType):
             self.users = []
 
         if isinstance(user, list):
@@ -214,44 +213,37 @@ class AllowedMentions(BaseModel):
 
         return self
 
-    def remove_user(
-        self: Self, user: str | list[str] | int | None
-    ) -> "AllowedMentions":
+    def remove_user(self: Self, user: str | list[str] | int) -> "AllowedMentions":
         """
         Remove a user ID from the Allowed Mentions instance.
 
         Arguments:
-            user (str | list[str] | int | None): A user ID, list of user IDs, or an index
-                to remove. If set to None, the users value is cleared.
+            user (str | list[str] | int): A user ID, list of user IDs, or an index
+                to remove.
 
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
         """
-        if self.users:
-            if user:
-                if isinstance(user, list):
-                    for entry in user:
-                        self.users.remove(entry)
-                elif isinstance(user, int):
-                    self.users.pop(user)
-                else:
-                    self.users.remove(user)
-
-                # Do not retain an empty list
-                if len(self.users) == 0:
-                    self.users = None
+        if isinstance(self.users, list):
+            if isinstance(user, str):
+                self.users.remove(user)
+            elif isinstance(user, int):
+                self.users.pop(user)
             else:
-                self.users = None
+                self.users = [entry for entry in self.users if entry not in user]
+
+            # Do not retain an empty list
+            if len(self.users) == 0:
+                self.users = UNSET
 
         return self
 
-    def set_replied_user(self: Self, replied_user: bool | None) -> "AllowedMentions":
+    def set_replied_user(self: Self, replied_user: bool) -> "AllowedMentions":
         """
         Set whether to mention the author of the message being replied to.
 
         Arguments:
-            replied_user (bool | None): True to mention the author. If set to None, the
-                replied_user value is cleared.
+            replied_user (bool): True to mention the author.
 
         Returns:
             self (AllowedMentions): The modified Allowed Mentions instance.
@@ -285,7 +277,7 @@ class MessageFlags(IntEnum):
     """Allows you to create fully Component-driven messages."""
 
 
-class Webhook(BaseModel):
+class Webhook(Struct, kw_only=True):
     """
     Represent a Discord Webhook object.
 
@@ -295,85 +287,86 @@ class Webhook(BaseModel):
     https://discord.com/developers/docs/resources/webhook
 
     Attributes:
-        url (str | HttpUrl | None): The URL used for executing the Webhook.
+        url (str): The URL used for executing the Webhook.
 
-        content (str | None): The message contents (up to 2000 characters).
+        content (str): The message contents (up to 2000 characters).
 
-        username (str | None): Override the default username of the Webhook.
+        username (str): Override the default username of the Webhook.
 
-        avatar_url (str | None): Override the default avatar of the Webhook.
+        avatar_url (str): Override the default avatar of the Webhook.
 
-        tts (bool | None): True if this is a TTS message.
+        tts (bool): True if this is a TTS message.
 
-        embeds (list[Embed] | None): Embedded rich content.
+        embeds (list[Embed]): Embedded rich content.
 
-        allowed_mentions (AllowedMentions | None): Allowed mentions for the message.
+        allowed_mentions (AllowedMentions): Allowed mentions for the message.
 
-        components (list[TopLevelComponent] | None): The Components to include with the message.
+        components (list[TopLevelComponent]): The Components to include with the message.
 
-        files (list[None] | None): The contents of the file being sent.
+        files (list[None]): The contents of the file being sent.
 
-        attachments (list[None] | None): Attachment objects with filename and description.
+        attachments (list[None]): Attachment objects with filename and description.
 
-        flags (int | None): Message Flags combined as a bitfield.
+        flags (int): Message Flags combined as a bitfield.
 
-        thread_name (str | None): Name of thread to create (requires the Webhook channel
+        thread_name (str): Name of thread to create (requires the Webhook channel
             to be a forum or media channel).
 
-        applied_tags (list[str] | None): Array of tag ids to apply to the thread (requires
+        applied_tags (list[str]): Array of tag ids to apply to the thread (requires
             the Webhook channel to be a forum or media channel).
 
-        poll (Poll | None): A Poll!
+        poll (Poll): A Poll!
 
         _query_params (dict[str, str]): Additional query parameters to append to the URL.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Webhook class."""
-
-    url: str | HttpUrl | None = Field(default=None, exclude=True)
+    url: str = msgspec.field()
     """The URL used for executing the Webhook."""
 
-    content: str | None = Field(default=None, max_length=2000)
+    content: UnsetType | Annotated[str, Meta(max_length=2000)] = msgspec.field(
+        default=UNSET
+    )
     """The message contents (up to 2000 characters)."""
 
-    username: str | None = Field(default=None)
+    username: UnsetType | str = msgspec.field(default=UNSET)
     """Override the default username of the Webhook."""
 
-    avatar_url: str | None = Field(default=None)
+    avatar_url: UnsetType | str = msgspec.field(default=UNSET)
     """Override the default avatar of the Webhook."""
 
-    tts: bool | None = Field(default=None)
+    tts: UnsetType | bool = msgspec.field(default=UNSET)
     """True if this is a TTS message."""
 
-    embeds: list[Embed] | None = Field(default=None, max_length=10)
+    embeds: UnsetType | Annotated[list[Embed], Meta(min_length=1, max_length=10)] = (
+        msgspec.field(default=UNSET)
+    )
     """Embedded rich content."""
 
-    allowed_mentions: AllowedMentions | None = Field(default=None)
+    allowed_mentions: UnsetType | AllowedMentions = msgspec.field(default=UNSET)
     """Allowed mentions for the message."""
 
-    components: list[TopLevelComponent] | None = Field(default=None)
+    components: UnsetType | list[TopLevelComponent] = msgspec.field(default=UNSET)
     """The Components to include with the message."""
 
-    files: None = Field(default=None)
+    files: UnsetType = msgspec.field(default=UNSET)
     """The contents of the file being sent."""
 
-    attachments: None = Field(default=None)
+    attachments: UnsetType = msgspec.field(default=UNSET)
     """Attachment objects with filename and description."""
 
-    flags: int | None = Field(default=None)
+    flags: UnsetType | int = msgspec.field(default=UNSET)
     """Message Flags combined as a bitfield."""
 
-    thread_name: str | None = Field(default=None)
+    thread_name: UnsetType | str = msgspec.field(default=UNSET)
     """Name of thread to create (requires the Webhook channel to be a forum or media channel)."""
 
-    applied_tags: list[str] | None = Field(default=None)
+    applied_tags: UnsetType | list[str] = msgspec.field(default=UNSET)
     """Array of tag ids to apply to the thread (requires the Webhook channel to be a forum or media channel)."""
 
-    poll: Poll | None = Field(default=None)
+    poll: UnsetType | Poll = msgspec.field(default=UNSET)
     """A Poll!"""
 
-    _query_params: dict[str, str] = {}
+    _query_params: ClassVar[dict[str, str]] = {}
     """Additional query parameters to append to the URL."""
 
     def execute(self: Self) -> Response:
@@ -385,13 +378,13 @@ class Webhook(BaseModel):
         Returns:
             res (Response): Response object for the execution request.
         """
-        if not self.url:
-            raise ValueError("Webhook URL cannot be None")
+        self._validate()
 
         res: Response = httpx.post(
-            str(self.url),
-            json=self.model_dump(exclude_none=True, serialize_as_any=True),
+            self.url,
             params=self._query_params,
+            headers={"Content-Type": "application/json"},
+            content=msgspec.json.encode(self),
         )
 
         logging.debug(f"{res.request.method=} {res.request.content=}")
@@ -408,14 +401,14 @@ class Webhook(BaseModel):
         Returns:
             res (Response): Response object for the execution request.
         """
-        if not self.url:
-            raise ValueError("Webhook URL cannot be None")
+        self._validate()
 
         async with AsyncClient() as client:
             res: Response = await client.post(
-                str(self.url),
-                json=self.model_dump(exclude_none=True, serialize_as_any=True),
+                self.url,
                 params=self._query_params,
+                headers={"Content-Type": "application/json"},
+                content=msgspec.json.encode(self),
             )
 
         logging.debug(f"{res.request.method=} {res.request.content=}")
@@ -423,26 +416,12 @@ class Webhook(BaseModel):
 
         return res.raise_for_status()
 
-    def set_url(self: Self, url: str) -> "Webhook":
-        """
-        Set the URL of the Webhook.
-
-        Arguments:
-            url (str): A Discord Webhook URL.
-
-        Returns:
-            self (Webhook): The modified Webhook instance.
-        """
-        self.url = HttpUrl(url)
-
-        return self
-
-    def set_content(self: Self, content: str | None) -> "Webhook":
+    def set_content(self: Self, content: UnsetType | str) -> "Webhook":
         """
         Set the message content of the Webhook.
 
         Arguments:
-            content (str | None): Message content. If set to None, the message content
+            content (str): Message content. If set to None, the message content
                 is cleared.
 
         Returns:
@@ -452,12 +431,12 @@ class Webhook(BaseModel):
 
         return self
 
-    def set_username(self: Self, username: str | None) -> "Webhook":
+    def set_username(self: Self, username: UnsetType | str) -> "Webhook":
         """
         Set the username of the Webhook instance.
 
         Arguments:
-            username (str | None): A username. If set to None, the username is cleared.
+            username (str): A username. If set to None, the username is cleared.
 
         Returns:
             self (Webhook): The modified Webhook instance.
@@ -466,30 +445,26 @@ class Webhook(BaseModel):
 
         return self
 
-    def set_avatar_url(self: Self, avatar_url: str | None) -> "Webhook":
+    def set_avatar_url(self: Self, avatar_url: UnsetType | str) -> "Webhook":
         """
         Set the avatar URL of the Webhook instance.
 
         Arguments:
-            avatar_url (str | None): An image URL. If set to None, the avatar_url is cleared.
+            avatar_url (str): An image URL. If set to None, the avatar_url is cleared.
 
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if avatar_url:
-            avatar_url = str(HttpUrl(avatar_url))
-
         self.avatar_url = avatar_url
 
         return self
 
-    def set_tts(self: Self, tts: bool | None) -> "Webhook":
+    def set_tts(self: Self, tts: UnsetType | bool) -> "Webhook":
         """
         Set whether the Webhook instance is a text-to-speech message.
 
         Arguments:
-            tts (bool | None): Toggle text-to-speech functionality. If set to None, the
-                tts value is cleared.
+            tts (bool): Toggle text-to-speech functionality.
 
         Returns:
             self (Webhook): The modified Webhook instance.
@@ -508,7 +483,7 @@ class Webhook(BaseModel):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if not self.embeds:
+        if isinstance(self.embeds, UnsetType):
             self.embeds = []
 
         if isinstance(embed, Embed):
@@ -518,7 +493,7 @@ class Webhook(BaseModel):
 
         return self
 
-    def remove_embed(self: Self, embed: Embed | list[Embed] | int | None) -> "Webhook":
+    def remove_embed(self: Self, embed: Embed | list[Embed] | int) -> "Webhook":
         """
         Remove embedded rich content from the Webhook instance.
 
@@ -529,26 +504,22 @@ class Webhook(BaseModel):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if self.embeds:
-            if embed:
-                if isinstance(embed, list):
-                    for entry in embed:
-                        self.embeds.remove(entry)
-                elif isinstance(embed, int):
-                    self.embeds.pop(embed)
-                else:
-                    self.embeds.remove(embed)
-
-                # Do not retain an empty list
-                if len(self.embeds) == 0:
-                    self.embeds = None
+        if isinstance(self.embeds, list):
+            if isinstance(embed, Embed):
+                self.embeds.remove(embed)
+            elif isinstance(embed, int):
+                self.embeds.pop(embed)
             else:
-                self.embeds = None
+                self.embeds = [entry for entry in self.embeds if entry not in embed]
+
+            # Do not retain an empty list
+            if len(self.embeds) == 0:
+                self.embeds = UNSET
 
         return self
 
     def set_allowed_mentions(
-        self: Self, allowed_mentions: AllowedMentions | None
+        self: Self, allowed_mentions: UnsetType | AllowedMentions
     ) -> "Webhook":
         """
         Set the allowed mentions for the Webhook instance.
@@ -577,7 +548,7 @@ class Webhook(BaseModel):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if not self.components:
+        if isinstance(self.components, UnsetType):
             self.components = []
 
         if not self.get_flag(MessageFlags.IS_COMPONENTS_V2):
@@ -593,39 +564,31 @@ class Webhook(BaseModel):
         return self
 
     def remove_component(
-        self: Self, component: TopLevelComponent | list[TopLevelComponent] | int | None
+        self: Self, component: TopLevelComponent | list[TopLevelComponent] | int
     ) -> "Webhook":
         """
         Remove a Component from the Webhook instance.
 
         Arguments:
-            component (TopLevelComponent | list[TopLevelComponent] | int | None): A Component,
-                list of Components, or an index to remove. If set to None, all Components
-                are removed.
+            component (TopLevelComponent | list[TopLevelComponent] | int): A Component,
+                list of Components, or an index to remove.
 
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if self.components:
-            if component:
-                if isinstance(component, list):
-                    for entry in component:
-                        self.components.remove(entry)
-                elif isinstance(component, int):
-                    self.components.pop(component)
-                else:
-                    self.components.remove(component)
-
-                # Do not retain an empty list
-                if len(self.components) == 0:
-                    self.components = None
+        if isinstance(self.components, list):
+            if isinstance(component, TopLevelComponent):
+                self.components.remove(component)
+            elif isinstance(component, int):
+                self.components.pop(component)
             else:
-                self.components = None
+                self.components = [
+                    entry for entry in self.components if entry not in component
+                ]
 
-        # Do not retain unused values
-        if not self.components:
-            self._set_with_components(None)
-            self.set_flag(MessageFlags.IS_COMPONENTS_V2, None)
+            # Do not retain an empty list
+            if len(self.components) == 0:
+                self.components = UNSET
 
         return self
 
@@ -644,7 +607,7 @@ class Webhook(BaseModel):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if not self.flags:
+        if isinstance(self.flags, UnsetType):
             self.flags = 0
 
         if value:
@@ -666,12 +629,12 @@ class Webhook(BaseModel):
         Returns:
             value (bool): The value of the Message Flag.
         """
-        if self.flags and (self.flags & flag):
+        if isinstance(self.flags, int) and (self.flags & flag):
             return True
 
         return False
 
-    def set_thread_name(self: Self, thread_name: str | None) -> "Webhook":
+    def set_thread_name(self: Self, thread_name: UnsetType | str) -> "Webhook":
         """
         Set the name of the thread to create.
 
@@ -765,29 +728,20 @@ class Webhook(BaseModel):
 
         return self
 
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str | HttpUrl) -> HttpUrl:
-        """
-        Validate whether the value of URL is a valid Discord Webhook URL.
+    def _validate(self: Self) -> None:
+        """Convert applicable data types prior to Webhook serialization."""
+        if isinstance(self.embeds, list):
+            for embed in self.embeds:
+                if not isinstance(embed.color, UnsetType):
+                    embed.color = Validation.convert_color(embed.color)
 
-        Arguments:
-            url (str | HttpUrl): A URL to validate.
+                if not isinstance(embed.timestamp, UnsetType):
+                    embed.timestamp = Validation.convert_timestamp(embed.timestamp)
 
-        Returns:
-            url (HttpUrl): The validate Webhook URL value.
-        """
-        if isinstance(url, str):
-            url = HttpUrl(url)
-
-        if url.scheme.lower() != "https":
-            raise ValueError("Webhook URL scheme is not HTTPS")
-        elif not url.host or url.host.lower() not in [
-            "discord.com",
-            "canary.discord.com",
-        ]:
-            raise ValueError("Webhook URL host is not a Discord domain")
-        elif not url.path or not url.path.lower().startswith("/api/webhooks/"):
-            raise ValueError("Webhook URL path is not valid")
-
-        return url
+        if isinstance(self.components, list):
+            for component in self.components:
+                if isinstance(component, Container):
+                    if not isinstance(component.accent_color, UnsetType):
+                        component.accent_color = Validation.convert_color(
+                            component.accent_color
+                        )

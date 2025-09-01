@@ -1,15 +1,15 @@
 """Define the Media Gallery class and its associates."""
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import msgspec
+from msgspec import UNSET, Meta, Struct, UnsetType
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
-from clyde.validation import Validation
 
 
-class MediaGalleryItem(BaseModel):
+class MediaGalleryItem(Struct, kw_only=True):
     """
     Represent a Media Gallery Item to be used within a Media Gallery Component.
 
@@ -18,21 +18,18 @@ class MediaGalleryItem(BaseModel):
     Attributes:
         media (UnfurledMediaItem): A URL or attachment.
 
-        description (str | None): Alt text for the media.
+        description (UnsetType | str): Alt text for the media.
 
-        spoiler (bool | None): Whether the media should be a spoiler (blurred).
+        spoiler (UnsetType | bool): Whether the media should be a spoiler (blurred).
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Media Gallery Item class."""
-
-    media: UnfurledMediaItem | None = Field(default=None)
+    media: UnfurledMediaItem = msgspec.field()
     """A URL or attachment."""
 
-    description: str | None = Field(default=None)
+    description: UnsetType | str = msgspec.field(default=UNSET)
     """Alt text for the media."""
 
-    spoiler: bool | None = Field(default=None)
+    spoiler: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether the media should be a spoiler (blurred)."""
 
     def set_media(self: Self, media: UnfurledMediaItem | str) -> "MediaGalleryItem":
@@ -52,15 +49,12 @@ class MediaGalleryItem(BaseModel):
 
         return self
 
-    def set_description(
-        self: Self, description: str | None = None
-    ) -> "MediaGalleryItem":
+    def set_description(self: Self, description: str) -> "MediaGalleryItem":
         """
         Set the alt text for the Media Gallery Item.
 
         Arguments:
             description (str | None): The alt text to set for the Media Gallery Item.
-                If set to None, the alt text is cleared.
 
         Returns:
             self (MediaGalleryItem): The modified MediaGalleryItem instance.
@@ -69,13 +63,23 @@ class MediaGalleryItem(BaseModel):
 
         return self
 
-    def set_spoiler(self: Self, spoiler: bool | None) -> "MediaGalleryItem":
+    def remove_description(self: Self) -> "MediaGalleryItem":
+        """
+        Remove the alt text from the Media Gallery Item.
+
+        Returns:
+            self (MediaGalleryItem): The modified MediaGalleryItem instance.
+        """
+        self.description = UNSET
+
+        return self
+
+    def set_spoiler(self: Self, spoiler: bool) -> "MediaGalleryItem":
         """
         Set whether the Media Gallery Item should be a spoiler (blurred).
 
         Arguments:
             spoiler (bool): True if the Media Gallery Item should be a spoiler (blurred).
-                If set to None, the value of spoiler is cleared.
 
         Returns:
             self (MediaGalleryItem): The modified MediaGalleryItem instance.
@@ -84,26 +88,19 @@ class MediaGalleryItem(BaseModel):
 
         return self
 
-    @field_validator("media", mode="after")
-    @classmethod
-    def _validate_media(cls, media: UnfurledMediaItem) -> UnfurledMediaItem:
+    def remove_spoiler(self: Self) -> "MediaGalleryItem":
         """
-        Validate the value of media for a Media Gallery Item.
-
-        Arguments:
-            media (UnfurledMediaItem): The value to validate.
+        Set whether the Media Gallery Item should be a spoiler (blurred).
 
         Returns:
-            media (UnfurledMediaItem): The validated media value.
+            self (MediaGalleryItem): The modified MediaGalleryItem instance.
         """
-        return UnfurledMediaItem(
-            url=Validation.validate_url_scheme(
-                media.url, ["http", "https", "attachment"]
-            )
-        )
+        self.spoiler = UNSET
+
+        return self
 
 
-class MediaGallery(Component):
+class MediaGallery(Component, kw_only=True):
     """
     Represent a Discord Component of the Media Gallery type.
 
@@ -119,10 +116,12 @@ class MediaGallery(Component):
         items (list[MediaGalleryItem]): 1 to 10 Media Gallery Items.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.MEDIA_GALLERY, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.MEDIA_GALLERY)
     """The value of ComponentTypes.MEDIA_GALLERY."""
 
-    items: list[MediaGalleryItem] | None = Field(default=None, max_length=10)
+    items: Annotated[list[MediaGalleryItem], Meta(min_length=1, max_length=10)] = (
+        msgspec.field()
+    )
     """1 to 10 Media Gallery Items."""
 
     def add_item(
@@ -138,44 +137,31 @@ class MediaGallery(Component):
         Returns:
             self (MediaGallery): The modified Media Gallery instance.
         """
-        if not self.items:
-            self.items = []
-
-        if isinstance(item, list):
-            self.items.extend(item)
-        else:
+        if isinstance(item, MediaGalleryItem):
             self.items.append(item)
+        else:
+            self.items.extend(item)
 
         return self
 
     def remove_item(
-        self: Self, item: MediaGalleryItem | list[MediaGalleryItem] | int | None
+        self: Self, item: MediaGalleryItem | list[MediaGalleryItem] | int
     ) -> "MediaGallery":
         """
         Remove a Media Gallery Item from the Media Gallery instance.
 
         Arguments:
-            item (MediaGalleryItem | list[MediaGalleryItem] | int | None): A Media Gallery
-                Item, list of Media Gallery Items, or an index to remove. If set to None,
-                all items are removed.
+            item (MediaGalleryItem | list[MediaGalleryItem] | int): A Media Gallery Item,
+                list of Media Gallery Items, or an index to remove.
 
         Returns:
             self (MediaGallery): The modified Media Gallery instance.
         """
-        if self.items:
-            if item:
-                if isinstance(item, list):
-                    for entry in item:
-                        self.items.remove(entry)
-                elif isinstance(item, int):
-                    self.items.pop(item)
-                else:
-                    self.items.remove(item)
-
-                # Do not retain an empty list
-                if len(self.items) == 0:
-                    self.items = None
-            else:
-                self.items = None
+        if isinstance(item, MediaGalleryItem):
+            self.items.remove(item)
+        elif isinstance(item, int):
+            self.items.pop(item)
+        else:
+            self.items = [entry for entry in self.items if entry not in item]
 
         return self

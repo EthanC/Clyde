@@ -55,7 +55,7 @@ def test_component_action_row() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    action_row: ActionRow = ActionRow()
+    action_row: ActionRow = ActionRow(components=[])
 
     action_row.add_component(
         LinkButton(label=STRING_EXTRA_SHORT, url=STRING_URL_GITHUB)
@@ -67,6 +67,24 @@ def test_component_action_row() -> None:
     assert isinstance(res, Response) and res.is_success
 
 
+@pytest.mark.xfail
+def test_component_action_row_empty() -> None:
+    """
+    A test-case to validate the creation and execution of a Webhook with an empty
+    Action Row Component.
+    """
+
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    action_row: ActionRow = ActionRow(components=[])
+
+    webhook.add_component(action_row)
+
+    res: Response = webhook.execute()
+
+    # Webhook execution is expected to fail due to no Components within Action Row
+    assert isinstance(res, Response) and res.is_success
+
+
 def test_component_link_button() -> None:
     """
     A test-case to validate the creation and execution of a Webhook with a Link Button
@@ -74,8 +92,8 @@ def test_component_link_button() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    action_row: ActionRow = ActionRow()
-    button: LinkButton = LinkButton()
+    action_row: ActionRow = ActionRow(components=[])
+    button: LinkButton = LinkButton(label=STRING_WORD, url=STRING_URL_GITHUB)
 
     button.set_label(STRING_WORD)
     button.set_url(STRING_URL_DISCORD)
@@ -94,8 +112,8 @@ def test_component_container() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    container: Container = Container()
-    body: TextDisplay = TextDisplay()
+    container: Container = Container(components=[])
+    body: TextDisplay = TextDisplay(content=STRING_WORD)
 
     body.set_content(STRING_LONG)
     container.set_spoiler(True)
@@ -118,7 +136,7 @@ def test_component_media_gallery() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    gallery: MediaGallery = MediaGallery()
+    gallery: MediaGallery = MediaGallery(items=[])
 
     gallery.add_item(
         MediaGalleryItem(
@@ -193,7 +211,9 @@ def test_component_section() -> None:
     """A test-case to validate the creation and execution of a Webhook with a Section Component."""
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    section: Section = Section()
+    section: Section = Section(
+        components=[], accessory=LinkButton(label=STRING_WORD, url=STRING_URL_DISCORD)
+    )
 
     section.add_component(TextDisplay(content=STRING_SHORT))
     section.add_component(TextDisplay(content=STRING_MEDIUM))
@@ -204,8 +224,6 @@ def test_component_section() -> None:
 
     section.add_component(TextDisplay(content=STRING_LONG))
 
-    section.set_accessory(LinkButton(label=STRING_EXTRA_SHORT, url=STRING_URL_DISCORD))
-    section.remove_accessory()
     section.set_accessory(LinkButton(label=STRING_EXTRA_SHORT, url=STRING_URL_GITHUB))
 
     webhook.add_component(section)
@@ -239,7 +257,7 @@ def test_component_text_display() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    text_display: TextDisplay = TextDisplay()
+    text_display: TextDisplay = TextDisplay(content=STRING_WORD)
 
     text_display.set_content(STRING_LONG_MARKDOWN)
     webhook.add_component(text_display)
@@ -257,7 +275,7 @@ def test_component_text_display_validate() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    text_display: TextDisplay = TextDisplay()
+    text_display: TextDisplay = TextDisplay(content=STRING_WORD)
 
     text_display.set_content(STRING_EXTRA_LONG)
     webhook.add_component(text_display)
@@ -272,8 +290,10 @@ def test_component_thumbnail() -> None:
     """A test-case to validate the creation and execution of a Webhook with a Thumbnail Component."""
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    thumbnail: Thumbnail = Thumbnail()
-    section: Section = Section()
+    thumbnail: Thumbnail = Thumbnail(media=UnfurledMediaItem(url=STRING_URL_ICON_4))
+    section: Section = Section(
+        components=[], accessory=LinkButton(label=STRING_WORD, url=STRING_URL_GITHUB)
+    )
 
     thumbnail.set_media(STRING_URL_ICON_1)
     thumbnail.set_description(STRING_SHORT)
@@ -296,8 +316,10 @@ def test_component_unfurled_media_item() -> None:
     """
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    gallery: MediaGallery = MediaGallery()
-    frame: MediaGalleryItem = MediaGalleryItem()
+    gallery: MediaGallery = MediaGallery(items=[])
+    frame: MediaGalleryItem = MediaGalleryItem(
+        media=UnfurledMediaItem(url=STRING_URL_ICON_2)
+    )
     picture: UnfurledMediaItem = UnfurledMediaItem()
 
     picture.set_url(STRING_URL_IMAGE_3)

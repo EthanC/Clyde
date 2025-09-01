@@ -2,11 +2,10 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from clyde.validation import Validation
+import msgspec
+from msgspec import UNSET, Meta, Struct, UnsetType
 
 
 class EmbedTypes(StrEnum):
@@ -23,7 +22,7 @@ class EmbedTypes(StrEnum):
     """Generic Embed rendered from Embed attributes."""
 
 
-class EmbedFooter(BaseModel):
+class EmbedFooter(Struct, kw_only=True):
     """
     Represent the Footer information of an Embed.
 
@@ -32,16 +31,13 @@ class EmbedFooter(BaseModel):
     Attributes:
         text (str): Footer text.
 
-        icon_url (str | None): URL of Footer icon (only supports HTTP(S) and Attachments).
+        icon_url (UnsetType | str): URL of Footer icon (only supports HTTP(S) and Attachments).
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed Footer class."""
-
-    text: str | None = Field(default=None, max_length=2048)
+    text: Annotated[str, Meta(min_length=1, max_length=2048)] = msgspec.field()
     """Footer text."""
 
-    icon_url: str | None = Field(default=None)
+    icon_url: UnsetType | str = msgspec.field(default=UNSET)
     """URL of Footer icon (only supports HTTP(S) and Attachments)."""
 
     def set_text(self: Self, text: str) -> "EmbedFooter":
@@ -72,22 +68,8 @@ class EmbedFooter(BaseModel):
 
         return self
 
-    @field_validator("icon_url", mode="after")
-    @classmethod
-    def _validate_icon_url(cls, icon_url: str) -> str:
-        """
-        Validate the value of icon URL for an Embed Footer.
 
-        Arguments:
-            url (str): The value to validate.
-
-        Returns:
-            url (str): The validated URL value.
-        """
-        return Validation.validate_url_scheme(icon_url, ["http", "https", "attachment"])
-
-
-class EmbedImage(BaseModel):
+class EmbedImage(Struct, kw_only=True):
     """
     Represent the Image information of an Embed.
 
@@ -97,10 +79,7 @@ class EmbedImage(BaseModel):
         url (str): Source URL of image (only supports HTTP(S) and Attachments).
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed Image class."""
-
-    url: str | None = Field(default=None)
+    url: str = msgspec.field()
     """Source URL of image (only supports HTTP(S) and Attachments)."""
 
     def set_url(self: Self, url: str) -> "EmbedImage":
@@ -117,22 +96,8 @@ class EmbedImage(BaseModel):
 
         return self
 
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str:
-        """
-        Validate the value of URL for an Embed Image.
 
-        Arguments:
-            url (str): The value to validate.
-
-        Returns:
-            url (str): The validated URL value.
-        """
-        return Validation.validate_url_scheme(url, ["http", "https", "attachment"])
-
-
-class EmbedThumbnail(BaseModel):
+class EmbedThumbnail(Struct, kw_only=True):
     """
     Represent the Thumbnail information of an Embed.
 
@@ -142,10 +107,7 @@ class EmbedThumbnail(BaseModel):
         url (str): Source URL of Thumbnail (only supports HTTP(S) and Attachments).
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed Thumbnail class."""
-
-    url: str | None = Field(default=None)
+    url: str = msgspec.field()
     """Source URL of Thumbnail (only supports HTTP(S) and Attachments)."""
 
     def set_url(self: Self, url: str) -> "EmbedThumbnail":
@@ -162,22 +124,8 @@ class EmbedThumbnail(BaseModel):
 
         return self
 
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str:
-        """
-        Validate the value of URL for an Embed Thumbnail.
 
-        Arguments:
-            url (str): The value to validate.
-
-        Returns:
-            url (str): The validated URL value.
-        """
-        return Validation.validate_url_scheme(url, ["http", "https", "attachment"])
-
-
-class EmbedAuthor(BaseModel):
+class EmbedAuthor(Struct, kw_only=True):
     """
     Represent the Author information of an Embed.
 
@@ -186,21 +134,18 @@ class EmbedAuthor(BaseModel):
     Attributes:
         name (str): Name of author.
 
-        url (str | None): URL of author (only supports HTTP(S)).
+        url (UnsetType | str): URL of author (only supports HTTP(S)).
 
-        icon_url (str | None): URL of author icon (only supports HTTP(S) and Attachments).
+        icon_url (UnsetType | str): URL of author icon (only supports HTTP(S) and Attachments).
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed Author class."""
-
-    name: str | None = Field(default=None, max_length=256)
+    name: Annotated[str, Meta(min_length=1, max_length=256)] = msgspec.field()
     """Name of author."""
 
-    url: str | None = Field(default=None)
+    url: UnsetType | str = msgspec.field(default=UNSET)
     """URL of author (only supports HTTP(S))."""
 
-    icon_url: str | None = Field(default=None)
+    icon_url: UnsetType | str = msgspec.field(default=UNSET)
     """URL of author icon (only supports HTTP(S) and Attachments)."""
 
     def set_name(self: Self, name: str) -> "EmbedAuthor":
@@ -231,19 +176,16 @@ class EmbedAuthor(BaseModel):
 
         return self
 
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str:
+    def remove_url(self: Self) -> "EmbedAuthor":
         """
-        Validate the value of URL for an Embed Author.
-
-        Arguments:
-            url (str): The value to validate.
+        Remove the URL from the Embed Author instance.
 
         Returns:
-            url (str): The validated URL value.
+            self (EmbedAuthor): The modified Embed Author instance.
         """
-        return Validation.validate_url_scheme(url, ["http", "https"])
+        self.url = UNSET
+
+        return self
 
     def set_icon_url(self: Self, icon_url: str) -> "EmbedAuthor":
         """
@@ -259,22 +201,19 @@ class EmbedAuthor(BaseModel):
 
         return self
 
-    @field_validator("icon_url", mode="after")
-    @classmethod
-    def _validate_icon_url(cls, icon_url: str) -> str:
+    def remove_icon_url(self: Self) -> "EmbedAuthor":
         """
-        Validate the value of icon URL for an Embed Author.
-
-        Arguments:
-            url (str): The value to validate.
+        Remove the icon URL from the Embed Author instance.
 
         Returns:
-            url (str): The validated URL value.
+            self (EmbedAuthor): The modified Embed Author instance.
         """
-        return Validation.validate_url_scheme(icon_url, ["http", "https", "attachment"])
+        self.icon_url = UNSET
+
+        return self
 
 
-class EmbedField(BaseModel):
+class EmbedField(Struct, kw_only=True):
     """
     Represent field information in an Embed.
 
@@ -285,94 +224,94 @@ class EmbedField(BaseModel):
 
         value (str): Value of the field.
 
-        inline (bool | None): Whether or not this field should display inline.
+        inline (UnsetType | bool): Whether or not this field should display inline.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed Field class."""
-
-    name: str | None = Field(default=None, max_length=256)
+    name: Annotated[str, Meta(min_length=1, max_length=256)] = msgspec.field()
     """Name of the field."""
 
-    value: str | None = Field(default=None, max_length=1024)
+    value: Annotated[str, Meta(min_length=1, max_length=1024)] = msgspec.field()
     """Value of the field."""
 
-    inline: bool | None = Field(default=None)
+    inline: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether or not this field should display inline."""
 
 
-class Embed(BaseModel):
+class Embed(Struct, kw_only=True):
     """
     Represent a Discord Embed of the Rich type.
 
     https://discord.com/developers/docs/resources/message#embed-object
 
     Attributes:
-        title (str | None): Title of Embed.
+        title (UnsetType | str): Title of Embed.
 
-        type (EmbedTypes): The value of EmbedTypes.RICH.
+        type (Final[Literal[EmbedTypes.RICH]]): The value of EmbedTypes.RICH.
 
-        description (str | None): Description of Embed.
+        description (UnsetType | str): Description of Embed.
 
-        url (str | None): URL of Embed.
+        url (UnsetType | str): URL of Embed.
 
-        timestamp (str | int | float | datetime | None): Timestamp of Embed content.
+        timestamp (UnsetType | str | int | float | datetime): Timestamp of Embed content.
 
-        color (str | int | None): Color code of the Embed.
+        color (UnsetType | str | int): Color code of the Embed.
 
-        footer (EmbedFooter | None): Footer information.
+        footer (UnsetType | EmbedFooter): Footer information.
 
-        image (EmbedImage | None): Image information.
+        image (UnsetType | EmbedImage): Image information.
 
-        thumbnail (EmbedThumbnail | None): Thumbnail information.
+        thumbnail (UnsetType | EmbedThumbnail): Thumbnail information.
 
-        author (EmbedAuthor | None): Author information.
+        author (UnsetType | EmbedAuthor): Author information.
 
-        fields (list[EmbedField] | None): Fields information, max of 25.
+        fields (UnsetType | list[EmbedField]): Fields information, max of 25.
     """
 
-    model_config = ConfigDict(use_attribute_docstrings=True, validate_assignment=True)
-    """Pydantic configuration for the Embed class."""
-
-    title: str | None = Field(default=None, max_length=256)
+    title: UnsetType | Annotated[str, Meta(min_length=1, max_length=256)] = (
+        msgspec.field(default=UNSET)
+    )
     """Title of Embed."""
 
-    type: EmbedTypes = Field(default=EmbedTypes.RICH, frozen=True)
+    type: Final[Literal[EmbedTypes.RICH]] = msgspec.field(default=EmbedTypes.RICH)
     """The value of EmbedTypes.RICH."""
 
-    description: str | None = Field(default=None, max_length=4096)
+    description: UnsetType | Annotated[str, Meta(min_length=1, max_length=4096)] = (
+        msgspec.field(default=UNSET)
+    )
     """Description of Embed."""
 
-    url: str | None = Field(default=None)
+    url: UnsetType | str = msgspec.field(default=UNSET)
     """URL of Embed."""
 
-    timestamp: int | float | str | datetime | None = Field(default=None)
+    timestamp: UnsetType | int | float | str | datetime = msgspec.field(default=UNSET)
     """Timestamp of Embed content."""
 
-    color: str | int | None = Field(default=None)
+    color: UnsetType | str | int = msgspec.field(default=UNSET)
     """Color code of the Embed."""
 
-    footer: EmbedFooter | None = Field(default=None)
+    footer: UnsetType | EmbedFooter = msgspec.field(default=UNSET)
     """Footer information."""
 
-    image: EmbedImage | None = Field(default=None)
+    image: UnsetType | EmbedImage = msgspec.field(default=UNSET)
     """Image information."""
 
-    thumbnail: EmbedThumbnail | None = Field(default=None)
+    thumbnail: UnsetType | EmbedThumbnail = msgspec.field(default=UNSET)
     """Thumbnail information."""
 
-    author: EmbedAuthor | None = Field(default=None)
+    author: UnsetType | EmbedAuthor = msgspec.field(default=UNSET)
     """Author information."""
 
-    fields: list[EmbedField] | None = Field(default=None, max_length=25)
+    fields: (
+        UnsetType | Annotated[list[EmbedField], Meta(min_length=1, max_length=25)]
+    ) = msgspec.field(default=UNSET)
     """Fields information, max of 25."""
 
-    def set_title(self: Self, title: str | None) -> "Embed":
+    def set_title(self: Self, title: str) -> "Embed":
         """
         Set the title of the Embed.
 
         Arguments:
-            title (str | None): Title of Embed. If set to None, the title is cleared.
+            title (str): Title of Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -381,13 +320,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_description(self: Self, description: str | None) -> "Embed":
+    def remove_title(self: Self) -> "Embed":
+        """
+        Remove the title of the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.title = UNSET
+
+        return self
+
+    def set_description(self: Self, description: str) -> "Embed":
         """
         Set the description of the Embed.
 
         Arguments:
-            description (str | None): Description of Embed. If set to None, the description
-                is cleared.
+            description (str): Description of Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -396,12 +345,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_url(self: Self, url: str | None) -> "Embed":
+    def remove_description(self: Self) -> "Embed":
+        """
+        Remove the description of the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.description = UNSET
+
+        return self
+
+    def set_url(self: Self, url: str) -> "Embed":
         """
         Set the URL of the Embed.
 
         Arguments:
-            url (str | None): URL of Embed. If set to None, the URL is cleared.
+            url (str): URL of Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -410,15 +370,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_timestamp(
-        self: Self, timestamp: int | float | str | datetime | None
-    ) -> "Embed":
+    def remove_url(self: Self) -> "Embed":
         """
-        Set the timestamp of the Embed content.
+        Remove the URL of the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.url = UNSET
+
+        return self
+
+    def set_timestamp(self: Self, timestamp: int | float | str | datetime) -> "Embed":
+        """
+        Set the timestamp of the Embed.
 
         Arguments:
-            timestamp (str | int | float | datetime | None): Timestamp of Embed content.
-                If set to None, the timestamp is cleared.
+            timestamp (str | int | float | datetime): Timestamp of Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -427,13 +395,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_color(self: Self, color: str | int | None) -> "Embed":
+    def remove_timestamp(self: Self) -> "Embed":
+        """
+        Remove the timestamp from the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.timestamp = UNSET
+
+        return self
+
+    def set_color(self: Self, color: str | int) -> "Embed":
         """
         Set the color code of the Embed.
 
         Arguments:
-            color (str | int | None): Color code of the Embed. If set to None, the color
-                is cleared.
+            color (str | int): Color code of the Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -442,13 +420,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_footer(self: Self, footer: EmbedFooter | None) -> "Embed":
+    def remove_color(self: Self) -> "Embed":
         """
-        Set the footer information of the Embed.
+        Remove the color of the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.color = UNSET
+
+        return self
+
+    def set_footer(self: Self, footer: EmbedFooter) -> "Embed":
+        """
+        Set the footer of the Embed.
 
         Arguments:
-            footer (EmbedFooter | None): Footer information. If set to None, the footer
-                is cleared.
+            footer (EmbedFooter): An Embed Footer.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -457,13 +445,23 @@ class Embed(BaseModel):
 
         return self
 
-    def add_image(self: Self, image: EmbedImage | None) -> "Embed":
+    def remove_footer(self: Self) -> "Embed":
+        """
+        Remove the footer from the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.footer = UNSET
+
+        return self
+
+    def add_image(self: Self, image: EmbedImage) -> "Embed":
         """
         Add an image to the Embed.
 
         Arguments:
-            image (EmbedImage | None): Image information. If set to None, the image is
-                cleared.
+            image (EmbedImage): An Embed Image.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -472,13 +470,23 @@ class Embed(BaseModel):
 
         return self
 
-    def set_thumbnail(self: Self, thumbnail: EmbedThumbnail | None) -> "Embed":
+    def remove_image(self: Self) -> "Embed":
         """
-        Set the thumbnail information of the Embed.
+        Remove an image from the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.image = UNSET
+
+        return self
+
+    def set_thumbnail(self: Self, thumbnail: EmbedThumbnail) -> "Embed":
+        """
+        Set the thumbnail of the Embed.
 
         Arguments:
-            thumbnail (EmbedThumbnail | None): Thumbnail information. If set to None,
-                the thumbnail is cleared.
+            thumbnail (EmbedThumbnail): An Embed Thumbnail.
 
         Returns:
             self (Embed): The modified Embed instance.
@@ -487,18 +495,39 @@ class Embed(BaseModel):
 
         return self
 
-    def set_author(self: Self, author: EmbedAuthor | None) -> "Embed":
+    def remove_thumbnail(self: Self) -> "Embed":
+        """
+        Remove the thumbnail from the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.thumbnail = UNSET
+
+        return self
+
+    def set_author(self: Self, author: EmbedAuthor) -> "Embed":
         """
         Set the author information of the Embed.
 
         Arguments:
-            author (EmbedAuthor | None): Author information. If set to None, the author
-                is cleared.
+            author (EmbedAuthor): Author information.
 
         Returns:
             self (Embed): The modified Embed instance.
         """
         self.author = author
+
+        return self
+
+    def remove_author(self: Self) -> "Embed":
+        """
+        Remove the author information from the Embed.
+
+        Returns:
+            self (Embed): The modified Embed instance.
+        """
+        self.author = UNSET
 
         return self
 
@@ -513,7 +542,7 @@ class Embed(BaseModel):
         Returns:
             self (Embed): The modified Embed instance.
         """
-        if not self.fields:
+        if isinstance(self.fields, UnsetType):
             self.fields = []
 
         if isinstance(field, EmbedField):
@@ -523,76 +552,27 @@ class Embed(BaseModel):
 
         return self
 
-    def remove_field(
-        self: Self, field: EmbedField | list[EmbedField] | int | None
-    ) -> "Embed":
+    def remove_field(self: Self, field: EmbedField | list[EmbedField] | int) -> "Embed":
         """
         Remove one or more fields from the Embed.
 
         Arguments:
-            field (EmbedField | list[EmbedField] | int | None): An Embed Field, list of
-                Embed Fields, or an index to remove. If set to None, the fields value is
-                cleared.
+            field (EmbedField | list[EmbedField] | int): An Embed Field, list of
+                Embed Fields, or an index to remove.
 
         Returns:
             self (Embed): The modified Embed instance.
         """
-        if self.fields:
-            if field:
-                if isinstance(field, list):
-                    for entry in field:
-                        self.fields.remove(entry)
-                elif isinstance(field, int):
-                    self.fields.pop(field)
-                else:
-                    self.fields.remove(field)
-
-                # Do not retain an empty list
-                if len(self.fields) == 0:
-                    self.fields = None
+        if isinstance(self.fields, list):
+            if isinstance(field, EmbedField):
+                self.fields.remove(field)
+            elif isinstance(field, int):
+                self.fields.pop(field)
             else:
-                self.fields = None
+                self.fields = [entry for entry in self.fields if entry not in field]
+
+            # Do not retain an empty list
+            if len(self.fields) == 0:
+                self.fields = UNSET
 
         return self
-
-    @field_validator("url", mode="after")
-    @classmethod
-    def _validate_url(cls, url: str) -> str | int:
-        """
-        Validate the value of color for an Embed.
-
-        Arguments:
-            color (str | int): The value to validate.
-
-        Returns:
-            color (int): The validated color value.
-        """
-        return Validation.validate_url_scheme(url, ["http", "https"])
-
-    @field_validator("timestamp", mode="after")
-    @classmethod
-    def _validate_timestamp(cls, timestamp: int | float | str | datetime) -> str | int:
-        """
-        Validate the value of timestamp for an Embed.
-
-        Arguments:
-            color (str | int): The value to validate.
-
-        Returns:
-            color (int): The validated color value.
-        """
-        return Validation.validate_timestamp(timestamp)
-
-    @field_validator("color", mode="after")
-    @classmethod
-    def _validate_color(cls, color: str | int) -> str | int:
-        """
-        Validate the value of color for an Embed.
-
-        Arguments:
-            color (str | int): The value to validate.
-
-        Returns:
-            color (int): The validated color value.
-        """
-        return Validation.validate_color(color)

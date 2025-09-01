@@ -2,13 +2,14 @@
 
 from typing import Self
 
-from pydantic import Field
+import msgspec
+from msgspec import UNSET, UnsetType
 
 from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
 
 
-class Thumbnail(Component):
+class Thumbnail(Component, kw_only=True):
     """
     Represent a Discord Component of the Thumbnail type.
 
@@ -27,16 +28,16 @@ class Thumbnail(Component):
         spoiler (bool | None): Whether the Thumbnail should be a spoiler (blurred).
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.THUMBNAIL, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.THUMBNAIL)
     """The value of ComponentTypes.THUMBNAIL."""
 
-    media: UnfurledMediaItem | None = Field(default=None)
+    media: UnfurledMediaItem = msgspec.field()
     """A URL or attachment."""
 
-    description: str | None = Field(default=None)
+    description: UnsetType | str = msgspec.field(default=UNSET)
     """Alt text for the media."""
 
-    spoiler: bool | None = Field(default=None)
+    spoiler: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether the Thumbnail should be a spoiler (blurred)."""
 
     def set_media(self: Self, media: UnfurledMediaItem | str) -> "Thumbnail":
@@ -56,13 +57,12 @@ class Thumbnail(Component):
 
         return self
 
-    def set_description(self: Self, description: str | None) -> "Thumbnail":
+    def set_description(self: Self, description: str) -> "Thumbnail":
         """
         Set the alt text for the Thumbnail.
 
         Arguments:
-            description (str | None): The alt text to set for the Thumbnail. If set to
-                None, the alt text is cleared.
+            description (str | None): The alt text to set for the Thumbnail.
 
         Returns:
             self (Thumbnail): The modified Thumbnail instance.
@@ -71,17 +71,38 @@ class Thumbnail(Component):
 
         return self
 
-    def set_spoiler(self: Self, spoiler: bool | None) -> "Thumbnail":
+    def remove_description(self: Self) -> "Thumbnail":
+        """
+        Remove the alt text from the Thumbnail.
+
+        Returns:
+            self (Thumbnail): The modified Thumbnail instance.
+        """
+        self.description = UNSET
+
+        return self
+
+    def set_spoiler(self: Self, spoiler: bool) -> "Thumbnail":
         """
         Set whether the Thumbnail should be a spoiler (blurred).
 
         Arguments:
-            spoiler (bool): True if the Thumbnail should be a spoiler (blurred). If set
-                to None, the spoiler value is cleared.
+            spoiler (bool): True if the Thumbnail should be a spoiler (blurred).
 
         Returns:
             self (Thumbnail): The modified Thumbnail instance.
         """
         self.spoiler = spoiler
+
+        return self
+
+    def remove_spoiler(self: Self) -> "Thumbnail":
+        """
+        Remove whether the Thumbnail should be a spoiler (blurred).
+
+        Returns:
+            self (Thumbnail): The modified Thumbnail instance.
+        """
+        self.spoiler = UNSET
 
         return self

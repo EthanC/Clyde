@@ -3,7 +3,8 @@
 from enum import IntEnum
 from typing import Self
 
-from pydantic import Field
+import msgspec
+from msgspec import UNSET, UnsetType
 
 from clyde.component import Component, ComponentTypes
 
@@ -17,7 +18,7 @@ class SeperatorSpacing(IntEnum):
 
     Attributes:
         SMALL (int): The smaller padding size.
-        
+
         LARGE (int): The larger padding size.
     """
 
@@ -28,7 +29,7 @@ class SeperatorSpacing(IntEnum):
     """Large padding."""
 
 
-class Seperator(Component):
+class Seperator(Component, kw_only=True):
     """
     Represent a Discord Component of the Seperator type.
 
@@ -45,22 +46,21 @@ class Seperator(Component):
         spacing (SeperatorSpacing | None): Size of Separator padding.
     """
 
-    type: ComponentTypes = Field(default=ComponentTypes.SEPERATOR, frozen=True)
+    type: ComponentTypes = msgspec.field(default=ComponentTypes.SEPERATOR)
     """The value of ComponentTypes.SEPERATOR."""
 
-    divider: bool | None = Field(default=None)
+    divider: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether a visual divider should be displayed in the Component."""
 
-    spacing: SeperatorSpacing | None = Field(default=None)
+    spacing: UnsetType | SeperatorSpacing = msgspec.field(default=UNSET)
     """Size of Separator padding."""
 
-    def set_divider(self: Self, divider: bool | None) -> "Seperator":
+    def set_divider(self: Self, divider: bool) -> "Seperator":
         """
         Set whether a visual divider should be displayed in the Component.
 
         Arguments:
             divider (bool): True if a visual divider should be displayed in the Component.
-                If set to None, the divider value is cleared.
 
         Returns:
             self (Seperator): The modified Seperator instance.
@@ -69,17 +69,38 @@ class Seperator(Component):
 
         return self
 
-    def set_spacing(self: Self, spacing: SeperatorSpacing | None) -> "Seperator":
+    def remove_divider(self: Self) -> "Seperator":
+        """
+        Remove whether a visual divider should be displayed in the Component.
+
+        Returns:
+            self (Seperator): The modified Seperator instance.
+        """
+        self.divider = UNSET
+
+        return self
+
+    def set_spacing(self: Self, spacing: SeperatorSpacing) -> "Seperator":
         """
         Set the size of the padding on the Seperator.
 
         Arguments:
-            spacing (SeperatorSpacing): The size of the padding on the Seperator. If set
-                to None, the spacing value is cleared.
+            spacing (SeperatorSpacing): The size of the padding on the Seperator.
 
         Returns:
             self (Seperator): The modified Seperator instance.
         """
         self.spacing = spacing
+
+        return self
+
+    def remove_spacing(self: Self) -> "Seperator":
+        """
+        Remove the size of the padding from the Seperator.
+
+        Returns:
+            self (Seperator): The modified Seperator instance.
+        """
+        self.spacing = UNSET
 
         return self
