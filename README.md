@@ -23,7 +23,7 @@ It's lightweight, developer-friendly, and supports advanced features like [Compo
 ### Installation
 
 > [!IMPORTANT]
-> Clyde requires Python 3.13 or later.
+> Clyde requires Python 3.10 or later.
 
 Install with [uv](https://github.com/astral-sh/uv) (recommended):
 
