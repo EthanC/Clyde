@@ -33,6 +33,8 @@ jobs:
         with:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Install tox
+        run: uv tool install tox --with tox-uv
       - name: Run tox
         run: uv run tox
         env:
