@@ -83,3 +83,4 @@ env_list = [
 description = "Run test under {base_python}"
 commands = [["pytest"]]
 allowlist_externals = ["pytest"]
+set_env = { TESTS_WEBHOOK_URL = "{env:TESTS_WEBHOOK_URL}" }
