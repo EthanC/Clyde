@@ -859,7 +859,7 @@ class Webhook(Struct, kw_only=True):
         res_data: Any = res.json()
 
         if isinstance(res_data, dict) and res_data.get("retry_after"):
-            delay = res_data["retry-after"]
+            delay = res_data["retry_after"]
 
         logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
 
