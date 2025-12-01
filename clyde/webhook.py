@@ -1,13 +1,15 @@
 """Define the Webhook class and its associates."""
 
 import logging
+from asyncio import sleep as async_sleep
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Annotated, Iterable, Literal, Self, Tuple, TypeAlias
+from time import sleep
+from typing import Annotated, Any, Iterable, Literal, Self, Tuple, TypeAlias
 
 import httpx
 import msgspec
-from httpx import AsyncClient, Client, Request, Response
+from httpx import Request, Response
 from msgspec import UNSET, Meta, Struct, UnsetType
 
 from clyde.attachment import Attachment
@@ -413,6 +415,19 @@ class Webhook(Struct, kw_only=True):
             logging.debug(f"{res.request.method=} {res.request.content=}")
             logging.debug(f"{res.status_code=} {res.text=}")
 
+            while res.status_code == 429:
+                res_data: Any = res.json()
+                delay: float = 5.0
+
+                if isinstance(res_data, dict) and res_data.get("retry_after"):
+                    delay = res_data["retry_after"]
+
+                logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+
+                sleep(delay)
+
+                res = client.send(req)
+
             return res.raise_for_status()
 
     async def execute_async(self: Self) -> Response:
@@ -426,18 +441,53 @@ class Webhook(Struct, kw_only=True):
         """
         self._validate()
 
-        async with AsyncClient() as client:
-            res: Response = await client.post(
-                self.url,
-                params=self._query_params,
-                headers={"Content-Type": "application/json"},
-                content=msgspec.json.encode(self),
-            )
+        async with httpx.AsyncClient(params=self._query_params) as client:
+            if len(self._attachments) > 0:
+                files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
+                    "payload_json": (None, msgspec.json.encode(self))
+                }
 
-        logging.debug(f"{res.request.method=} {res.request.content=}")
-        logging.debug(f"{res.status_code=} {res.text=}")
+                for attachment in self._attachments:
+                    if isinstance(attachment.filename, UnsetType):
+                        continue
+                    elif isinstance(attachment.content, UnsetType):
+                        continue
 
-        return res.raise_for_status()
+                    files[attachment.filename] = (
+                        attachment.filename,
+                        attachment.content,
+                    )
+
+                req: Request = client.build_request("POST", self.url, files=files)
+            else:
+                req: Request = client.build_request(
+                    "POST",
+                    self.url,
+                    content=msgspec.json.encode(self),
+                    headers={"Content-Type": "application/json"},
+                )
+
+            res: Response = await client.send(req)
+
+            res.request.read()
+
+            logging.debug(f"{res.request.method=} {res.request.content=}")
+            logging.debug(f"{res.status_code=} {res.text=}")
+
+            while res.status_code == 429:
+                res_data: Any = res.json()
+                delay: float = 5.0
+
+                if isinstance(res_data, dict) and res_data.get("retry_after"):
+                    delay = res_data["retry_after"]
+
+                logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+
+                async_sleep(delay)
+
+                res = await client.send(req)
+
+            return res.raise_for_status()
 
     def set_content(
         self: Self, content: UnsetType | str, fallback: bool = False

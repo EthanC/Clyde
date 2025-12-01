@@ -59,6 +59,21 @@ def test_webhook_execute() -> None:
     assert isinstance(res, Response) and res.is_success
 
 
+def test_webhook_execute_ratelimit() -> None:
+    """
+    A test-case to validate the successful execution of a Webhook instance which
+    purposefully gets itself rate-limited.
+    """
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_LONG)
+
+    res: Response = webhook.execute()
+
+    for _ in range(10):
+        webhook.execute()
+
+    assert isinstance(res, Response) and res.is_success
+
+
 @pytest.mark.xfail
 def test_webhook_execute_fail() -> None:
     """
