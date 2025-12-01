@@ -17,6 +17,7 @@ It's lightweight, developer-friendly, and supports advanced features like [Compo
 -   Granular customization of rich [Embeds](https://discord.com/developers/docs/resources/message#embed-object)
 -   Helpers for Discord-flavored markdown, including timestamps
 -   Compatible with both synchronous and asynchronous HTTP requests
+-   Seamless automatic retries when encountering Discord rate limits
 
 ## Getting Started
 
