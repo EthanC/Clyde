@@ -1,7 +1,7 @@
 """Define the Poll class and its associates."""
 
 from enum import IntEnum
-from typing import Annotated, Self
+from typing import Annotated, Iterable, Self
 
 import msgspec
 from msgspec import UNSET, Meta, Struct, UnsetType
@@ -212,13 +212,13 @@ class Poll(Struct, kw_only=True):
 
         return self
 
-    def add_answer(self: Self, answer: PollAnswer | list[PollAnswer]) -> "Poll":
+    def add_answer(self: Self, answer: PollAnswer | Iterable[PollAnswer]) -> "Poll":
         """
         Add an answer to the Poll.
 
         Arguments:
-            answer (PollAnswer | list[PollAnswer]): The Poll Answer or list of Poll Answers
-                to add to the Poll.
+            answer (PollAnswer | Iterable[PollAnswer]): The Poll Answer or an iterable
+                of Poll Answers to add to the Poll.
 
         Returns:
             self (Poll): The modified Poll instance.
@@ -226,10 +226,10 @@ class Poll(Struct, kw_only=True):
         if not self.answers:
             self.answers = []
 
-        if isinstance(answer, list):
-            self.answers.extend(answer)
-        else:
+        if isinstance(answer, PollAnswer):
             self.answers.append(answer)
+        elif isinstance(answer, Iterable):
+            self.answers.extend(answer)
 
         return self
 

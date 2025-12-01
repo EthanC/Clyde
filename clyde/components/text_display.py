@@ -7,7 +7,7 @@ import msgspec
 from clyde.component import Component, ComponentTypes
 
 
-class TextDisplay(Component, kw_only=True):
+class TextDisplay(Component, kw_only=True, tag="TextDisplay"):
     """
     Represent a Discord Component of the Text Display type.
 

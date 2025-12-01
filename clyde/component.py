@@ -60,7 +60,7 @@ class ComponentTypes(IntEnum):
     """Container that visually groups a set of Components."""
 
 
-class Component(Struct, kw_only=True):
+class Component(Struct, kw_only=True, tag_field="_type"):
     """
     Represent a Discord Component.
 

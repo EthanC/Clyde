@@ -29,7 +29,7 @@ class SeperatorSpacing(IntEnum):
     """Large padding."""
 
 
-class Seperator(Component, kw_only=True):
+class Seperator(Component, kw_only=True, tag="Seperator"):
     """
     Represent a Discord Component of the Seperator type.
 

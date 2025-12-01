@@ -9,7 +9,7 @@ from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
 
 
-class Thumbnail(Component, kw_only=True):
+class Thumbnail(Component, kw_only=True, tag="Thumbnail"):
     """
     Represent a Discord Component of the Thumbnail type.
 

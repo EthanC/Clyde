@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from time import sleep
 
 import pytest
@@ -15,11 +16,13 @@ from clyde import (
 
 from .constants import (
     FLOAT_TEST_DELAY,
+    FLOAT_TIMESTAMP,
     INT_TIMESTAMP,
     STRING_COLOR_WHITE,
     STRING_EXTRA_SHORT,
     STRING_LONG_MARKDOWN,
     STRING_SHORT,
+    STRING_TIMESTAMP,
     STRING_URL_GITHUB,
     STRING_URL_ICON_1,
     STRING_URL_ICON_2,
@@ -38,6 +41,10 @@ def delay() -> None:
 
 
 def test_embed() -> None:
+    """
+    A test-case to validate the successful use and execution of an Embed on a
+    Webhook object.
+    """
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
     embed: Embed = Embed()
     footer: EmbedFooter = EmbedFooter(text=STRING_SHORT)
@@ -71,6 +78,57 @@ def test_embed() -> None:
     embed.add_field(EmbedField(name="Eight", value="8", inline=True))
     embed.add_field(EmbedField(name="Nine", value="9", inline=True))
     embed.add_field(EmbedField(name="Ten", value="10"))
+    webhook.add_embed(embed)
+
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.is_success
+
+
+def test_embed_timestamp_string() -> None:
+    """
+    A test-case to validate the successful use and execution of an Embed with an
+    int object provided for the timestamp on a Webhook object.
+    """
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    embed: Embed = Embed()
+
+    embed.set_description(STRING_SHORT)
+    embed.set_timestamp(STRING_TIMESTAMP)
+    webhook.add_embed(embed)
+
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.is_success
+
+
+def test_embed_timestamp_float() -> None:
+    """
+    A test-case to validate the successful use and execution of an Embed with a
+    float object provided for the timestamp on a Webhook object.
+    """
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    embed: Embed = Embed()
+
+    embed.set_description(STRING_SHORT)
+    embed.set_timestamp(FLOAT_TIMESTAMP)
+    webhook.add_embed(embed)
+
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.is_success
+
+
+def test_embed_timestamp_datetime() -> None:
+    """
+    A test-case to validate the successful use and execution of an Embed with a
+    datetime object provided for the timestamp on a Webhook object.
+    """
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    embed: Embed = Embed()
+
+    embed.set_description(STRING_SHORT)
+    embed.set_timestamp(datetime.now(UTC))
     webhook.add_embed(embed)
 
     res: Response = webhook.execute()

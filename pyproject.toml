@@ -1,12 +1,12 @@
 [project]
 name = "discord-clyde"
-version = "0.4.0"
+version = "0.5.0"
 description = "A modern, type-hinted Python library for seamless interaction with the Discord Webhook API."
 readme = "README.md"
 authors = [
     { name = "Ethan C", email = "16727756+EthanC@users.noreply.github.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["msgspec>=0.20.0", "httpx>=0.28.1"]
 license = "AGPL-3.0"
 license-files = ["LICENSE"]
@@ -18,7 +18,6 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.10",
 ]
 
 [project.urls]
@@ -32,12 +31,13 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.6",
+    "ruff>=0.14.7",
     "pytest>=9.0.1",
     "pytest-cov>=7.0.0",
     "environs>=14.5.0",
-    "mkdocstrings[python]>=0.30.1",
+    "mkdocstrings[python]>=1.0.0",
     "mkdocs-material>=9.7.0",
+    "ty>=0.0.1a29",
 ]
 
 [tool.ruff]
@@ -72,12 +72,11 @@ packages = ["clyde"]
 [tool.tox]
 requires = ["tox>=4.32.0", "tox-uv>=1.29.0"]
 env_list = [
-    "3.10",
-    "3.11",
-    "3.12",
-    "3.13",
     "3.14",
-] # https://devguide.python.org/versions/
+    "3.13",
+    "3.12",
+    "3.11",
+]
 
 [tool.tox.env_run_base]
 description = "Run test under {base_python}"

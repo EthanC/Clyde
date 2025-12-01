@@ -2,13 +2,15 @@
 
 import logging
 from enum import IntEnum, StrEnum
-from typing import Annotated, ClassVar, Literal, Self, TypeAlias
+from pathlib import Path
+from typing import Annotated, Iterable, Literal, Self, Tuple, TypeAlias
 
 import httpx
 import msgspec
-from httpx import AsyncClient, Response
+from httpx import AsyncClient, Client, Request, Response
 from msgspec import UNSET, Meta, Struct, UnsetType
 
+from clyde.attachment import Attachment
 from clyde.components.action_row import ActionRow
 from clyde.components.container import Container
 from clyde.components.file import File
@@ -301,11 +303,8 @@ class Webhook(Struct, kw_only=True):
 
         allowed_mentions (AllowedMentions): Allowed mentions for the message.
 
-        components (list[TopLevelComponent]): The Components to include with the message.
-
-        files (list[None]): The contents of the file being sent.
-
-        attachments (list[None]): Attachment objects with filename and description.
+        components (list[TopLevelComponent]): The Components to include with the
+            message.
 
         flags (int): Message Flags combined as a bitfield.
 
@@ -317,7 +316,11 @@ class Webhook(Struct, kw_only=True):
 
         poll (Poll): A Poll!
 
-        _query_params (dict[str, str]): Additional query parameters to append to the URL.
+        _attachments (list[Attachment]): Attachment objects to include with the
+            payload.
+
+        _query_params (dict[str, str]): Additional query parameters to append to
+            the URL.
     """
 
     url: str = msgspec.field()
@@ -348,12 +351,6 @@ class Webhook(Struct, kw_only=True):
     components: UnsetType | list[TopLevelComponent] = msgspec.field(default=UNSET)
     """The Components to include with the message."""
 
-    files: UnsetType = msgspec.field(default=UNSET)
-    """The contents of the file being sent."""
-
-    attachments: UnsetType = msgspec.field(default=UNSET)
-    """Attachment objects with filename and description."""
-
     flags: UnsetType | int = msgspec.field(default=UNSET)
     """Message Flags combined as a bitfield."""
 
@@ -366,7 +363,10 @@ class Webhook(Struct, kw_only=True):
     poll: UnsetType | Poll = msgspec.field(default=UNSET)
     """A Poll!"""
 
-    _query_params: ClassVar[dict[str, str]] = {}
+    _attachments: list[Attachment] = []
+    """Attachment objects to include with the payload."""
+
+    _query_params: dict[str, str] = {}
     """Additional query parameters to append to the URL."""
 
     def execute(self: Self) -> Response:
@@ -380,17 +380,40 @@ class Webhook(Struct, kw_only=True):
         """
         self._validate()
 
-        res: Response = httpx.post(
-            self.url,
-            params=self._query_params,
-            headers={"Content-Type": "application/json"},
-            content=msgspec.json.encode(self),
-        )
+        with httpx.Client(params=self._query_params) as client:
+            if len(self._attachments) > 0:
+                files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
+                    "payload_json": (None, msgspec.json.encode(self))
+                }
 
-        logging.debug(f"{res.request.method=} {res.request.content=}")
-        logging.debug(f"{res.status_code=} {res.text=}")
+                for attachment in self._attachments:
+                    if isinstance(attachment.filename, UnsetType):
+                        continue
+                    elif isinstance(attachment.content, UnsetType):
+                        continue
 
-        return res.raise_for_status()
+                    files[attachment.filename] = (
+                        attachment.filename,
+                        attachment.content,
+                    )
+
+                req: Request = client.build_request("POST", self.url, files=files)
+            else:
+                req: Request = client.build_request(
+                    "POST",
+                    self.url,
+                    content=msgspec.json.encode(self),
+                    headers={"Content-Type": "application/json"},
+                )
+
+            res: Response = client.send(req)
+
+            res.request.read()
+
+            logging.debug(f"{res.request.method=} {res.request.content=}")
+            logging.debug(f"{res.status_code=} {res.text=}")
+
+            return res.raise_for_status()
 
     async def execute_async(self: Self) -> Response:
         """
@@ -416,17 +439,29 @@ class Webhook(Struct, kw_only=True):
 
         return res.raise_for_status()
 
-    def set_content(self: Self, content: UnsetType | str) -> "Webhook":
+    def set_content(
+        self: Self, content: UnsetType | str, fallback: bool = False
+    ) -> "Webhook":
         """
         Set the message content of the Webhook.
 
         Arguments:
             content (str): Message content. If set to None, the message content
                 is cleared.
+            fallback (bool): Set the content as a file Attachment if the message
+                length limit is exceeded.
 
         Returns:
             self (Webhook): The modified Webhook instance.
         """
+        if fallback and isinstance(content, str):
+            max_len: int | None = Validation.get_max_length(Webhook, "content")
+
+            if isinstance(max_len, int) and (len(content) > max_len):
+                self.add_attachment("message.txt", content.encode())
+
+                return self
+
         self.content = content
 
         return self
@@ -536,14 +571,14 @@ class Webhook(Struct, kw_only=True):
         return self
 
     def add_component(
-        self: Self, component: TopLevelComponent | list[TopLevelComponent]
+        self: Self, component: TopLevelComponent | Iterable[TopLevelComponent]
     ) -> "Webhook":
         """
         Add a Component to the Webhook instance.
 
         Arguments:
-            component (TopLevelComponent | list[TopLevelComponent]): A Component or list
-                of Components.
+            component (TopLevelComponent | Iterable[TopLevelComponent]): A Component or
+                an iterable of Components.
 
         Returns:
             self (Webhook): The modified Webhook instance.
@@ -556,10 +591,10 @@ class Webhook(Struct, kw_only=True):
 
         self._set_with_components(True)
 
-        if isinstance(component, list):
-            self.components.extend(component)
-        else:
+        if isinstance(component, TopLevelComponent):
             self.components.append(component)
+        elif isinstance(component, Iterable):
+            self.components.extend(component)
 
         return self
 
@@ -589,6 +624,64 @@ class Webhook(Struct, kw_only=True):
             # Do not retain an empty list
             if len(self.components) == 0:
                 self.components = UNSET
+
+        return self
+
+    def add_attachment(
+        self: Self, filename: str, content: bytes | Path, spoiler: bool = False
+    ) -> "Webhook":
+        """
+        Add a file Attachment to the Webhook instance.
+
+        Arguments:
+            filename (str): Name of the file to attach.
+
+            content (bytes | Path): Binary content of the file to attach.
+                If a Path is passed, the referenced file will be read.
+
+            spoiler (bool): True if the file should be a spoiler (blurred).
+
+        Returns:
+            self (Webhook): The modified Webhook instance.
+        """
+        if isinstance(content, Path):
+            with open(content, "rb") as handle:
+                content = handle.read()
+
+        attachment: Attachment = Attachment(filename=filename, content=content)
+
+        if spoiler:
+            attachment.set_spoiler(True)
+
+        self._attachments.append(attachment)
+
+        return self
+
+    def remove_attachment(
+        self: Self, attachment: Attachment | list[Attachment] | int | str
+    ) -> "Webhook":
+        """
+        Remove a file Attachment from the Webhook instance.
+
+        Arguments:
+            attachment (Attachment | list[Attachment] | int | str): An Attachment,
+                list of Attachments, an index, or a filename to remove.
+
+        Returns:
+            self (Webhook): The modified Webhook instance.
+        """
+        if isinstance(attachment, Attachment):
+            self._attachments.remove(attachment)
+        elif isinstance(attachment, int):
+            self._attachments.pop(attachment)
+        elif isinstance(attachment, str):
+            self._attachments = [
+                entry for entry in self._attachments if entry.filename != attachment
+            ]
+        else:
+            self._attachments = [
+                entry for entry in self._attachments if entry not in attachment
+            ]
 
         return self
 

@@ -2,7 +2,6 @@
     "recommendations": [
         "ms-python.python",
         "charliermarsh.ruff",
-        "tamasfe.even-better-toml",
-        "redhat.vscode-yaml"
+        "astral-sh.ty"
     ]
 }

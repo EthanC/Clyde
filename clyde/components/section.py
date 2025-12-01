@@ -11,7 +11,7 @@ from clyde.components.text_display import TextDisplay
 from clyde.components.thumbnail import Thumbnail
 
 
-class Section(Component, kw_only=True):
+class Section(Component, kw_only=True, tag="Section"):
     """
     Represent a Discord Component of the Section type.
 

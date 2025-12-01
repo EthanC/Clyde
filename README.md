@@ -23,7 +23,7 @@ It's lightweight, developer-friendly, and supports advanced features like [Compo
 ### Installation
 
 > [!IMPORTANT]
-> Clyde requires Python 3.10 or later.
+> Clyde requires Python 3.11 or later.
 
 Install with [uv](https://github.com/astral-sh/uv) (recommended):
 
@@ -114,12 +114,12 @@ Clyde loosely follows [Semantic Versioning](https://semver.org/) for consistent,
 
 ## Contributing
 
-Contributions are welcome—whether it’s fixing bugs or adding new features.
+Contributions are welcome - whether it’s fixing bugs or adding new features.
 
 -   See [`CONTRIBUTING.md`](/.github/CONTRIBUTING.md) for guidelines.
 -   See [Issues](https://github.com/EthanC/Clyde/issues) for known bugs and feature requests.
 
-## Acknowledgements
+## Acknowledgments
 
 The Clyde character and Discord brand assets are owned by Discord.
 

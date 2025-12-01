@@ -9,7 +9,7 @@ from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
 
 
-class MediaGalleryItem(Struct, kw_only=True):
+class MediaGalleryItem(Struct, kw_only=True, tag="MediaGalleryItem"):
     """
     Represent a Media Gallery Item to be used within a Media Gallery Component.
 
@@ -100,7 +100,7 @@ class MediaGalleryItem(Struct, kw_only=True):
         return self
 
 
-class MediaGallery(Component, kw_only=True):
+class MediaGallery(Component, kw_only=True, tag="MediaGallery"):
     """
     Represent a Discord Component of the Media Gallery type.
 

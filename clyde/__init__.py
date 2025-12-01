@@ -6,6 +6,7 @@ https://github.com/EthanC/Clyde
 
 from msgspec import UNSET, UnsetType
 
+from clyde.attachment import Attachment
 from clyde.component import Component
 from clyde.embed import (
     Embed,
@@ -28,6 +29,7 @@ from clyde.webhook import (
 __all__: list[str] = [
     "UNSET",
     "UnsetType",
+    "Attachment",
     "Component",
     "Embed",
     "EmbedAuthor",

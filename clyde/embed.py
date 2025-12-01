@@ -1,8 +1,8 @@
 """Define the Embed class and its associates."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Final, Self
 
 import msgspec
 from msgspec import UNSET, Meta, Struct, UnsetType
@@ -246,13 +246,13 @@ class Embed(Struct, kw_only=True):
     Attributes:
         title (UnsetType | str): Title of Embed.
 
-        type (Final[Literal[EmbedTypes.RICH]]): The value of EmbedTypes.RICH.
+        type (Final[str]): The value of EmbedTypes.RICH.
 
         description (UnsetType | str): Description of Embed.
 
         url (UnsetType | str): URL of Embed.
 
-        timestamp (UnsetType | str | int | float | datetime): Timestamp of Embed content.
+        timestamp (UnsetType | str): ISO8601 timestamp of Embed content.
 
         color (UnsetType | str | int): Color code of the Embed.
 
@@ -272,7 +272,7 @@ class Embed(Struct, kw_only=True):
     )
     """Title of Embed."""
 
-    type: Final[Literal[EmbedTypes.RICH]] = msgspec.field(default=EmbedTypes.RICH)
+    type: Final[str] = msgspec.field(default=EmbedTypes.RICH)
     """The value of EmbedTypes.RICH."""
 
     description: UnsetType | Annotated[str, Meta(min_length=1, max_length=4096)] = (
@@ -283,7 +283,7 @@ class Embed(Struct, kw_only=True):
     url: UnsetType | str = msgspec.field(default=UNSET)
     """URL of Embed."""
 
-    timestamp: UnsetType | int | float | str | datetime = msgspec.field(default=UNSET)
+    timestamp: UnsetType | str = msgspec.field(default=UNSET)
     """Timestamp of Embed content."""
 
     color: UnsetType | str | int = msgspec.field(default=UNSET)
@@ -381,7 +381,7 @@ class Embed(Struct, kw_only=True):
 
         return self
 
-    def set_timestamp(self: Self, timestamp: int | float | str | datetime) -> "Embed":
+    def set_timestamp(self: Self, timestamp: str | int | float | datetime) -> "Embed":
         """
         Set the timestamp of the Embed.
 
@@ -391,6 +391,11 @@ class Embed(Struct, kw_only=True):
         Returns:
             self (Embed): The modified Embed instance.
         """
+        if isinstance(timestamp, (int, float)):
+            timestamp = datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
+        elif isinstance(timestamp, datetime):
+            timestamp = timestamp.isoformat()
+
         self.timestamp = timestamp
 
         return self

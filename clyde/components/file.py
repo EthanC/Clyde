@@ -9,7 +9,7 @@ from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
 
 
-class File(Component, kw_only=True):
+class File(Component, kw_only=True, tag="File"):
     """
     Represent a Discord Component of the File type.
 

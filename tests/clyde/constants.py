@@ -3,6 +3,7 @@ from typing import Final
 from environs import env
 
 FLOAT_TEST_DELAY: Final[float] = 1.0
+FLOAT_TIMESTAMP: Final[float] = 948434400.0
 STRING_URL_WEBHOOK: Final[str] = env.url("TESTS_WEBHOOK_URL").geturl()
 STRING_URL_DISCORD: Final[str] = "https://discord.com/"
 STRING_URL_GITHUB: Final[str] = "https://github.com/EthanC/Clyde"
@@ -35,7 +36,8 @@ STRING_ID_ROLE: Final[str] = "409995554248982528"
 STRING_ID_THREAD: Final[str] = "1371232563271696456"
 STRING_LIST_SHORT: Final[list[str]] = ["Lorem", "Ipsum", "Dolor"]
 STRING_LIST_MEDIUM: Final[list[str]] = ["Lorem", "Ipsum", "Dolor", "Sit", "Amet"]
-INT_TIMESTAMP: Final[int] = 1516514400
+STRING_TIMESTAMP: Final[str] = "2000-01-21T06:00:00.000Z"
+INT_TIMESTAMP: Final[int] = 948434400
 INT_EXTRA_SHORT: Final[int] = 7
 INT_SHORT: Final[int] = 128
 INT_MEDIUM: Final[int] = 1337

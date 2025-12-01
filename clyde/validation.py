@@ -2,6 +2,9 @@
 
 from datetime import datetime
 
+from msgspec import Meta, Struct, inspect
+from msgspec.inspect import Field, StrType, StructType, Type, type_info
+
 
 class Validation:
     """Define static methods for reusable data validation and conversion."""
@@ -65,3 +68,32 @@ class Validation:
             )
 
         return value
+
+    @staticmethod
+    def get_max_length(struct: object, field_name: str) -> int | None:
+        """
+        Return the maximum string length of a Struct Field.
+
+        Arguments:
+            struct (Struct): A msgspec Struct.
+
+            field_name (str): Name of the Field to inspect.
+
+        Returns:
+            value (int | None): Maximum string length of the Field, if available.
+        """
+        struct_info: Type = type_info(struct)
+
+        if not isinstance(struct_info, StructType):
+            return
+
+        for field in struct_info.fields:
+            if field.name != field_name:
+                continue
+
+            field_info: Type = field.type
+
+            if not isinstance(field_info, StrType):
+                continue
+
+            return getattr(field_info, "max_length")

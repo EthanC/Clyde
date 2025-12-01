@@ -18,7 +18,7 @@ ContainerComponent: TypeAlias = (
 )
 
 
-class Container(Component, kw_only=True):
+class Container(Component, kw_only=True, tag="Container"):
     """
     Represent a Discord Component of the Container type.
 
