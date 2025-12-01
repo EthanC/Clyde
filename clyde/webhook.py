@@ -383,31 +383,7 @@ class Webhook(Struct, kw_only=True):
         self._validate()
 
         with httpx.Client(params=self._query_params) as client:
-            if len(self._attachments) > 0:
-                files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
-                    "payload_json": (None, msgspec.json.encode(self))
-                }
-
-                for attachment in self._attachments:
-                    if isinstance(attachment.filename, UnsetType):
-                        continue
-                    elif isinstance(attachment.content, UnsetType):
-                        continue
-
-                    files[attachment.filename] = (
-                        attachment.filename,
-                        attachment.content,
-                    )
-
-                req: Request = client.build_request("POST", self.url, files=files)
-            else:
-                req: Request = client.build_request(
-                    "POST",
-                    self.url,
-                    content=msgspec.json.encode(self),
-                    headers={"Content-Type": "application/json"},
-                )
-
+            req: Request = self._build_request(client)
             res: Response = client.send(req)
 
             res.request.read()
@@ -416,13 +392,7 @@ class Webhook(Struct, kw_only=True):
             logging.debug(f"{res.status_code=} {res.text=}")
 
             while res.status_code == 429:
-                res_data: Any = res.json()
-                delay: float = 5.0
-
-                if isinstance(res_data, dict) and res_data.get("retry_after"):
-                    delay = res_data["retry_after"]
-
-                logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+                delay: float = self._ratelimit_retry(res)
 
                 sleep(delay)
 
@@ -442,31 +412,7 @@ class Webhook(Struct, kw_only=True):
         self._validate()
 
         async with httpx.AsyncClient(params=self._query_params) as client:
-            if len(self._attachments) > 0:
-                files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
-                    "payload_json": (None, msgspec.json.encode(self))
-                }
-
-                for attachment in self._attachments:
-                    if isinstance(attachment.filename, UnsetType):
-                        continue
-                    elif isinstance(attachment.content, UnsetType):
-                        continue
-
-                    files[attachment.filename] = (
-                        attachment.filename,
-                        attachment.content,
-                    )
-
-                req: Request = client.build_request("POST", self.url, files=files)
-            else:
-                req: Request = client.build_request(
-                    "POST",
-                    self.url,
-                    content=msgspec.json.encode(self),
-                    headers={"Content-Type": "application/json"},
-                )
-
+            req: Request = self._build_request(client)
             res: Response = await client.send(req)
 
             res.request.read()
@@ -475,13 +421,7 @@ class Webhook(Struct, kw_only=True):
             logging.debug(f"{res.status_code=} {res.text=}")
 
             while res.status_code == 429:
-                res_data: Any = res.json()
-                delay: float = 5.0
-
-                if isinstance(res_data, dict) and res_data.get("retry_after"):
-                    delay = res_data["retry_after"]
-
-                logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+                delay: float = self._ratelimit_retry(res)
 
                 async_sleep(delay)
 
@@ -888,3 +828,39 @@ class Webhook(Struct, kw_only=True):
                         component.accent_color = Validation.convert_color(
                             component.accent_color
                         )
+
+    def _build_request(self: Self, client: httpx.Client | httpx.AsyncClient) -> Request:
+        """Return a Request object for the Webhook instance."""
+        if len(self._attachments) > 0:
+            files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
+                "payload_json": (None, msgspec.json.encode(self))
+            }
+
+            for attachment in self._attachments:
+                if isinstance(attachment.filename, UnsetType):
+                    continue
+                elif isinstance(attachment.content, UnsetType):
+                    continue
+
+                files[attachment.filename] = (attachment.filename, attachment.content)
+
+            return client.build_request("POST", self.url, files=files)
+
+        return client.build_request(
+            "POST",
+            self.url,
+            content=msgspec.json.encode(self),
+            headers={"Content-Type": "application/json"},
+        )
+
+    def _ratelimit_retry(self: Self, res: Response) -> float:
+        """Return the amount of time to wait after encountering a ratelimit."""
+        delay: float = 5.0
+        res_data: Any = res.json()
+
+        if isinstance(res_data, dict) and res_data.get("retry_after"):
+            delay = res_data["retry-after"]
+
+        logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+
+        return delay
