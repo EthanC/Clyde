@@ -60,7 +60,7 @@ jobs:
       - name: Install Dependencies
         run: uv add zensical mkdocstrings-python
       - name: Build Documentation
-        run: zensical build --clean
+        run: uv run zensical build --clean
       - name: Upload Documentation
         uses: actions/upload-pages-artifact@v4
         with:
