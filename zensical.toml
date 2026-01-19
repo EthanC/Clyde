@@ -1,0 +1,22 @@
+[project]
+site_name = "Clyde"
+site_description = "Documentation for Clyde, a modern, type-hinted Python library for seamless interaction with the Discord Webhook API.."
+site_url = "https://clyde.e3n.im/"
+site_author = "Ethan C"
+extra_css = ["stylesheets/extra.css"]
+
+[project.theme]
+palette.scheme = "slate"
+palette.primary = "custom"
+palette.accent = "custom"
+logo = "images/icon.png"
+favicon = "images/icon.png"
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["clyde"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+inherited_members = true
+show_source = false

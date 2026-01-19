@@ -45,6 +45,8 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       - name: Checkout Repository
         uses: actions/checkout@v6
       - name: Install uv
@@ -55,17 +57,14 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-      - name: Print cache_id
-        run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV 
-      - uses: actions/cache@v4
-        with:
-          key: mkdocs-material-${{ env.cache_id }}
-          path: .cache 
-          restore-keys: |
-            mkdocs-material-
       - name: Install Dependencies
-        run: uv add mkdocstrings[python] mkdocs-material
+        run: uv add zensical mkdocstrings-python
       - name: Build Documentation
-        run: uv run mkdocs build
+        run: zensical build --clean
+      - name: Upload Documentation
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
       - name: Deploy Documentation
-        run: uv run mkdocs gh-deploy --force
+        uses: actions/deploy-pages@v4
+        id: deployment

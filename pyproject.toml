@@ -31,13 +31,13 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.7",
-    "pytest>=9.0.1",
+    "ruff>=0.14.13",
+    "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "environs>=14.5.0",
-    "mkdocstrings[python]>=1.0.0",
-    "mkdocs-material>=9.7.0",
-    "ty>=0.0.1a29",
+    "ty>=0.0.12",
+    "zensical>=0.0.16",
+    "mkdocstrings-python>=2.0.1",
 ]
 
 [tool.ruff]
@@ -61,8 +61,8 @@ convention = "pep257"
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false
 
-[tool.pytest.ini_options]
-xfail_strict = true
+[tool.pytest]
+strict_xfail = true
 log_cli = true
 log_cli_level = "DEBUG"
 
@@ -70,7 +70,7 @@ log_cli_level = "DEBUG"
 packages = ["clyde"]
 
 [tool.tox]
-requires = ["tox>=4.32.0", "tox-uv>=1.29.0"]
+requires = ["tox>=4.34.1", "tox-uv>=1.29.0"]
 env_list = [
     "3.14",
     "3.13",

@@ -18,6 +18,7 @@ It's lightweight, developer-friendly, and supports advanced features like [Compo
 -   Helpers for Discord-flavored markdown, including timestamps
 -   Compatible with both synchronous and asynchronous HTTP requests
 -   Seamless automatic retries when encountering Discord rate limits
+-   Beautiful generated [documentation](https://clyde.e3n.im/) built with [Zensical](https://github.com/zensical/zensical)
 
 ## Getting Started
 

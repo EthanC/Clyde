@@ -1,4 +1,4 @@
-![Clyde](img/readme_banner.png)
+![Clyde](images/readme_banner.png)
 
 Clyde is a modern, type-hinted Python library for seamless interaction with the [Discord](https://discord.com/) Webhook API.
 
@@ -12,6 +12,7 @@ It's lightweight, developer-friendly, and supports advanced features like [Compo
 -   Granular customization of rich Embeds
 -   Helpers for Discord-flavored markdown, including timestamps
 -   Compatible with both synchronous and asynchronous HTTP requests
+-   Beautiful generated [documentation](https://clyde.e3n.im/) built with [Zensical](https://github.com/zensical/zensical)
 
 ## Getting Started
 
