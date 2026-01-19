@@ -7,7 +7,9 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   library:
@@ -66,5 +68,6 @@ jobs:
         with:
           path: site
       - name: Deploy Documentation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4
         id: deployment
