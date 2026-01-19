@@ -46,6 +46,8 @@ jobs:
   documentation:
     name: Documentation
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
     steps:
       - name: Configure Pages
         uses: actions/configure-pages@v5
