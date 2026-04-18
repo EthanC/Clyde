@@ -1,7 +1,7 @@
 from time import sleep
 
 import pytest
-from httpx import Response
+from niquests import Response
 
 from clyde import Webhook
 from clyde.components import (
@@ -64,7 +64,7 @@ def test_component_action_row() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -82,7 +82,7 @@ def test_component_action_row_empty() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to no Components within Action Row
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_link_button() -> None:
@@ -102,7 +102,7 @@ def test_component_link_button() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_container() -> None:
@@ -126,7 +126,7 @@ def test_component_container() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_media_gallery() -> None:
@@ -204,7 +204,7 @@ def test_component_media_gallery() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_section() -> None:
@@ -230,7 +230,7 @@ def test_component_section() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_seperator() -> None:
@@ -247,7 +247,7 @@ def test_component_seperator() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_text_display() -> None:
@@ -264,7 +264,7 @@ def test_component_text_display() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -283,7 +283,7 @@ def test_component_text_display_validate() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to too many characters
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_thumbnail() -> None:
@@ -306,7 +306,7 @@ def test_component_thumbnail() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_component_unfurled_media_item() -> None:
@@ -329,4 +329,4 @@ def test_component_unfurled_media_item() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok

@@ -1,13 +1,16 @@
 [project]
 name = "discord-clyde"
-version = "0.5.0"
+version = "0.6.0"
 description = "A modern, type-hinted Python library for seamless interaction with the Discord Webhook API."
 readme = "README.md"
 authors = [
     { name = "Ethan C", email = "16727756+EthanC@users.noreply.github.com" },
 ]
 requires-python = ">=3.11"
-dependencies = ["msgspec>=0.20.0", "httpx>=0.28.1"]
+dependencies = [
+    "msgspec>=0.21.1",
+    "niquests>=3.18.6",
+]
 license = "AGPL-3.0"
 license-files = ["LICENSE"]
 keywords = ["discord", "webhook", "rest", "api", "library", "wrapper"]
@@ -31,13 +34,13 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.13",
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "environs>=14.5.0",
-    "ty>=0.0.12",
-    "zensical>=0.0.16",
-    "mkdocstrings-python>=2.0.1",
+    "ruff>=0.15.11",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "environs>=15.0.1",
+    "ty>=0.0.31",
+    "zensical>=0.0.33",
+    "mkdocstrings-python>=2.0.3",
 ]
 
 [tool.ruff]
@@ -70,7 +73,7 @@ log_cli_level = "DEBUG"
 packages = ["clyde"]
 
 [tool.tox]
-requires = ["tox>=4.34.1", "tox-uv>=1.29.0"]
+requires = ["tox>=4.53.0", "tox-uv>=1.35.1"]
 env_list = [
     "3.14",
     "3.13",

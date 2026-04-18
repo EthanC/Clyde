@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from time import sleep
 
 import pytest
-from httpx import Response
+from niquests import Response
 
 from clyde import (
     Embed,
@@ -82,7 +82,7 @@ def test_embed() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_embed_timestamp_string() -> None:
@@ -99,7 +99,7 @@ def test_embed_timestamp_string() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_embed_timestamp_float() -> None:
@@ -116,7 +116,7 @@ def test_embed_timestamp_float() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_embed_timestamp_datetime() -> None:
@@ -133,4 +133,4 @@ def test_embed_timestamp_datetime() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok

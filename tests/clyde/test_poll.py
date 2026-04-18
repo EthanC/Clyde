@@ -1,7 +1,7 @@
 from time import sleep
 
 import pytest
-from httpx import Response
+from niquests import Response
 
 from clyde import Poll, PollAnswer, PollMediaAnswer, PollMediaQuestion, Webhook
 
@@ -33,7 +33,7 @@ def test_poll() -> None:
     )
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_poll_multiselect() -> None:
@@ -56,7 +56,7 @@ def test_poll_multiselect() -> None:
     )
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -88,4 +88,4 @@ def test_poll_answers_validate() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to too many answers
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok

@@ -7,10 +7,10 @@ from pathlib import Path
 from time import sleep
 from typing import Annotated, Any, Iterable, Literal, Self, Tuple, TypeAlias
 
-import httpx
 import msgspec
-from httpx import Request, Response
+import niquests
 from msgspec import UNSET, Meta, Struct, UnsetType
+from niquests import AsyncSession, Response, Session
 
 from clyde.attachment import Attachment
 from clyde.components.action_row import ActionRow
@@ -382,21 +382,18 @@ class Webhook(Struct, kw_only=True):
         """
         self._validate()
 
-        with httpx.Client(params=self._query_params) as client:
-            req: Request = self._build_request(client)
-            res: Response = client.send(req)
+        with Session() as ses:
+            req: dict[str, Any] = self._build_request()
+            res: Response = ses.post(self.url, **req)
 
-            res.request.read()
-
-            logging.debug(f"{res.request.method=} {res.request.content=}")
+            logging.debug(f"{res.request=}")
             logging.debug(f"{res.status_code=} {res.text=}")
 
+            # HTTP 429 Too Many Requests
             while res.status_code == 429:
-                delay: float = self._ratelimit_retry(res)
+                sleep(self._ratelimit_retry(res))
 
-                sleep(delay)
-
-                res = client.send(req)
+                res = ses.post(self.url, **req)
 
             return res.raise_for_status()
 
@@ -411,21 +408,18 @@ class Webhook(Struct, kw_only=True):
         """
         self._validate()
 
-        async with httpx.AsyncClient(params=self._query_params) as client:
-            req: Request = self._build_request(client)
-            res: Response = await client.send(req)
+        async with AsyncSession() as ses:
+            req: dict[str, Any] = self._build_request()
+            res: Response = await ses.post(self.url, **req)
 
-            res.request.read()
-
-            logging.debug(f"{res.request.method=} {res.request.content=}")
+            logging.debug(f"{res.request=}")
             logging.debug(f"{res.status_code=} {res.text=}")
 
+            # HTTP 429 Too Many Requests
             while res.status_code == 429:
-                delay: float = self._ratelimit_retry(res)
+                await async_sleep(self._ratelimit_retry(res))
 
-                async_sleep(delay)
-
-                res = await client.send(req)
+                res = await ses.post(self.url, **req)
 
             return res.raise_for_status()
 
@@ -829,7 +823,7 @@ class Webhook(Struct, kw_only=True):
                             component.accent_color
                         )
 
-    def _build_request(self: Self, client: httpx.Client | httpx.AsyncClient) -> Request:
+    def _build_request(self: Self) -> dict[str, Any]:
         """Return a Request object for the Webhook instance."""
         if len(self._attachments) > 0:
             files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
@@ -844,14 +838,13 @@ class Webhook(Struct, kw_only=True):
 
                 files[attachment.filename] = (attachment.filename, attachment.content)
 
-            return client.build_request("POST", self.url, files=files)
+            return {"files": files}
 
-        return client.build_request(
-            "POST",
-            self.url,
-            content=msgspec.json.encode(self),
-            headers={"Content-Type": "application/json"},
-        )
+        return {
+            "data": msgspec.json.encode(self),
+            "params": self._query_params,
+            "headers": {"Content-Type": "application/json"},
+        }
 
     def _ratelimit_retry(self: Self, res: Response) -> float:
         """Return the amount of time to wait after encountering a ratelimit."""

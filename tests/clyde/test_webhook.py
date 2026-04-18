@@ -2,7 +2,7 @@ from pathlib import Path
 from time import sleep
 
 import pytest
-from httpx import Response
+from niquests import Response
 
 from clyde import (
     AllowedMentions,
@@ -56,7 +56,7 @@ def test_webhook_execute() -> None:
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_LONG)
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_execute_ratelimit() -> None:
@@ -71,7 +71,7 @@ def test_webhook_execute_ratelimit() -> None:
     for _ in range(10):
         webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -86,7 +86,7 @@ def test_webhook_execute_fail() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to empty string
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_content() -> None:
@@ -100,7 +100,7 @@ def test_webhook_set_content() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -116,7 +116,7 @@ def test_webhook_set_content_fail() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to string length
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_content_fallback() -> None:
@@ -130,7 +130,7 @@ def test_webhook_set_content_fallback() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_username() -> None:
@@ -144,7 +144,7 @@ def test_webhook_set_username() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_avatar_url() -> None:
@@ -158,7 +158,7 @@ def test_webhook_set_avatar_url() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_tts() -> None:
@@ -172,7 +172,7 @@ def test_webhook_set_tts() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_allowed_mentions() -> None:
@@ -196,7 +196,7 @@ def test_webhook_set_allowed_mentions() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_plaintext() -> None:
@@ -211,7 +211,7 @@ def test_webhook_add_attachment_plaintext() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_image() -> None:
@@ -226,7 +226,7 @@ def test_webhook_add_attachment_image() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_image_multiple() -> None:
@@ -245,7 +245,7 @@ def test_webhook_add_attachment_image_multiple() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_binary() -> None:
@@ -260,7 +260,7 @@ def test_webhook_add_attachment_binary() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_binary_multiple() -> None:
@@ -285,7 +285,7 @@ def test_webhook_add_attachment_binary_multiple() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 @pytest.mark.xfail
@@ -301,7 +301,7 @@ def test_webhook_add_attachment_limit() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_path() -> None:
@@ -317,7 +317,7 @@ def test_webhook_add_attachment_path() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_add_attachment_path_multiple() -> None:
@@ -332,7 +332,7 @@ def test_webhook_add_attachment_path_multiple() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_wait() -> None:
@@ -346,7 +346,7 @@ def test_webhook_set_wait() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_thread_id() -> None:
@@ -360,7 +360,7 @@ def test_webhook_set_thread_id() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_flag() -> None:
@@ -378,7 +378,7 @@ def test_webhook_set_flag() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_get_flag() -> None:
@@ -394,7 +394,7 @@ def test_webhook_get_flag() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_set_thread_name() -> None:
@@ -440,7 +440,7 @@ def test_webhook_markdown() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
 
 
 def test_webhook_timestamp() -> None:
@@ -464,4 +464,4 @@ def test_webhook_timestamp() -> None:
 
     res: Response = webhook.execute()
 
-    assert isinstance(res, Response) and res.is_success
+    assert isinstance(res, Response) and res.ok
