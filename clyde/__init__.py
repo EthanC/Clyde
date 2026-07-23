@@ -4,7 +4,11 @@ A modern, type-hinted Python library for seamless interaction with the Discord W
 https://github.com/EthanC/Clyde
 """
 
+import logging
+
 from msgspec import UNSET, UnsetType
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 from clyde.attachment import Attachment
 from clyde.component import Component

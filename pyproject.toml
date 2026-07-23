@@ -67,7 +67,7 @@ split-on-trailing-comma = false
 [tool.pytest]
 strict_xfail = true
 log_cli = true
-log_cli_level = "DEBUG"
+log_cli_level = "WARNING"
 
 [tool.coverage.run]
 branch = true

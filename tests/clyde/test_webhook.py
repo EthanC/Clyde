@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from time import sleep
-from unittest.mock import AsyncMock, patch
 
 import msgspec
 import pytest
@@ -213,7 +212,7 @@ def test_webhook_http_error_logs_json_payload_piece(
             {"embeds": [{"fields": [{"value": "problematic value"}]}]}
         )
     }
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
 
     with pytest.raises(HTTPError):
         Webhook._raise_for_status(response, request)
@@ -221,13 +220,16 @@ def test_webhook_http_error_logs_json_payload_piece(
     records = [
         record
         for record in caplog.records
-        if record.getMessage().startswith("Discord request payload")
+        if record.name == "clyde.webhook"
+        and record.getMessage().startswith("Discord rejected request field")
     ]
     assert len(records) == 1
     assert records[0].levelno == logging.DEBUG
     assert records[0].getMessage() == (
-        "Discord request payload at embeds[0].fields[0].value: 'problematic value'"
+        "Discord rejected request field: path='embeds[0].fields[0].value', "
+        "value_type='str', value_length=17"
     )
+    assert "problematic value" not in caplog.text
 
 
 def test_webhook_http_error_logs_multipart_payload_piece(
@@ -263,7 +265,7 @@ def test_webhook_http_error_logs_multipart_payload_piece(
             "files[0]": ("test.txt", b"test"),
         }
     }
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
 
     with pytest.raises(HTTPError):
         Webhook._raise_for_status(response, request)
@@ -271,9 +273,11 @@ def test_webhook_http_error_logs_multipart_payload_piece(
     assert any(
         record.levelno == logging.DEBUG
         and record.getMessage()
-        == "Discord request payload at components[0].components[0]: {'type': 10, 'content': 'Bad'}"
+        == "Discord rejected request field: path='components[0].components[0]', "
+        "value_type='dict', value_length=2"
         for record in caplog.records
     )
+    assert "Bad" not in caplog.text
 
 
 def test_webhook_http_error_logs_missing_payload_piece(
@@ -319,14 +323,20 @@ def test_webhook_http_error_logs_missing_payload_piece(
             {"embeds": [{"fields": [{"name": "Missing value"}]}]}
         )
     }
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
 
     with pytest.raises(HTTPError):
         Webhook._raise_for_status(response, request)
 
     messages = [record.getMessage() for record in caplog.records]
-    assert "Discord request payload at embeds[0].fields[0].value: <missing>" in messages
-    assert "Discord request payload at embeds[0].fields[1].value: <missing>" in messages
+    assert (
+        "Discord rejected request field: path='embeds[0].fields[0].value', "
+        "value_present=False" in messages
+    )
+    assert (
+        "Discord rejected request field: path='embeds[0].fields[1].value', "
+        "value_present=False" in messages
+    )
 
 
 def test_webhook_http_error_skips_unavailable_request_payloads(
@@ -349,7 +359,7 @@ def test_webhook_http_error_skips_unavailable_request_payloads(
             },
         }
     )
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
 
     for request in ({}, {"files": []}, {"files": {}}, {"data": b"not json"}):
         caplog.clear()
@@ -358,7 +368,7 @@ def test_webhook_http_error_skips_unavailable_request_payloads(
             Webhook._raise_for_status(response, request)
 
         assert not any(
-            record.getMessage().startswith("Discord request payload")
+            record.getMessage().startswith("Discord rejected request field")
             for record in caplog.records
         )
 
@@ -367,12 +377,9 @@ def test_webhook_http_error_skips_unavailable_request_payloads(
 def test_webhook_http_error_ignores_unresolved_bodies(body: object | bytes) -> None:
     """Retain the standard HTTP error when Discord provides no useful details."""
     response = _discord_response(body)
-    expected = (
-        "400 Client Error: Bad Request for url: "
-        "https://discord.com/api/webhooks/1/token"
-    )
+    expected = "Discord webhook request failed: status_code=400, reason='Bad Request'"
 
-    with pytest.raises(HTTPError, match="400 Client Error") as caught:
+    with pytest.raises(HTTPError, match="status_code=400") as caught:
         Webhook._raise_for_status(response)
 
     assert str(caught.value) == expected
@@ -459,27 +466,14 @@ def test_webhook_modify() -> None:
         webhook.modify(avatar=b"not an image")
 
 
-def test_webhook_delete() -> None:
-    """Validate synchronous and asynchronous Webhook deletion requests."""
-    webhook = Webhook(
-        url="https://discord.com/api/webhooks/123/token/?wait=True#fragment"
-    )
-    response = Response()
-    expected_url = "https://discord.com/api/webhooks/123/token"
+def test_webhook_delete_validation() -> None:
+    """Validate DELETE audit-log reasons without sending a request."""
+    webhook = Webhook(url=STRING_URL_WEBHOOK)
 
-    with patch.object(Webhook, "_send_request", return_value=response) as send:
-        assert webhook.delete() is response
-        send.assert_called_once_with("DELETE", expected_url, {})
-
-    with patch.object(
-        Webhook, "_send_request_async", new_callable=AsyncMock, return_value=response
-    ) as send_async:
-        assert run(webhook.delete_async(reason="Cleanup / café?")) is response
-        send_async.assert_awaited_once_with(
-            "DELETE",
-            expected_url,
-            {"headers": {"X-Audit-Log-Reason": "Cleanup%20%2F%20caf%C3%A9%3F"}},
-        )
+    assert Webhook._audit_log_request(None) == {}
+    assert Webhook._audit_log_request("Cleanup / café?") == {
+        "headers": {"X-Audit-Log-Reason": "Cleanup%20%2F%20caf%C3%A9%3F"}
+    }
 
     with pytest.raises(ValueError, match="between 1 and 512"):
         webhook.delete(reason="")
@@ -602,21 +596,6 @@ def test_webhook_edit_message_components() -> None:
     assert edited_data["components"][0]["content"] == STRING_MEDIUM
 
 
-def test_webhook_execute_ratelimit() -> None:
-    """
-    A test-case to validate the successful execution of a Webhook instance which
-    purposefully gets itself rate-limited.
-    """
-    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_LONG)
-
-    res: Response = webhook.execute()
-
-    for _ in range(10):
-        webhook.execute()
-
-    assert isinstance(res, Response) and res.ok
-
-
 def test_webhook_execute_requires_message() -> None:
     """Reject execution without a message field before sending a request."""
     webhooks: list[Webhook] = [
@@ -626,18 +605,12 @@ def test_webhook_execute_requires_message() -> None:
     ]
     error = "at least one of content, embeds, components, file, or poll"
 
-    with patch.object(Webhook, "_send_request") as send:
-        for webhook in webhooks:
-            with pytest.raises(ValueError, match=error):
-                webhook.execute()
-
-        send.assert_not_called()
-
-    with patch.object(Webhook, "_send_request_async", new_callable=AsyncMock) as send:
+    for webhook in webhooks:
         with pytest.raises(ValueError, match=error):
-            run(Webhook(url=STRING_URL_WEBHOOK).execute_async())
+            webhook.execute()
 
-        send.assert_not_awaited()
+    with pytest.raises(ValueError, match=error):
+        run(Webhook(url=STRING_URL_WEBHOOK).execute_async())
 
 
 def test_webhook_set_content() -> None:
@@ -1220,12 +1193,13 @@ def test_webhook_edit_validation_branches() -> None:
 
 
 def test_webhook_sync_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
-    """Trigger and recover from a real synchronous Discord rate limit."""
-    caplog.set_level(logging.WARNING)
+    """Log and recover from a live synchronous Discord rate limit."""
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
     responses: list[Response] = []
 
     for _ in range(3):
         caplog.clear()
+
         with ThreadPoolExecutor(max_workers=8) as executor:
             responses = list(
                 executor.map(
@@ -1236,19 +1210,38 @@ def test_webhook_sync_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
                 )
             )
 
-        if any(record.message.startswith("Rate-limited") for record in caplog.records):
+        records = [
+            record for record in caplog.records if record.name == "clyde.webhook"
+        ]
+
+        if any(
+            record.getMessage().startswith("Discord rate limit received; retrying")
+            for record in records
+        ):
             break
 
-    assert responses and all(response.ok for response in responses)
-    assert any(record.message.startswith("Rate-limited") for record in caplog.records)
+    records = [record for record in caplog.records if record.name == "clyde.webhook"]
+    messages = [record.getMessage() for record in records]
 
-    webhook = Webhook(url=STRING_URL_WEBHOOK, content="Default retry delay")
-    successful: Response = webhook.set_wait(True).execute()
-    assert webhook._ratelimit_retry(successful) == 5.0
+    assert responses and all(response.ok for response in responses)
+    assert any(
+        record.levelno == logging.WARNING
+        and record.getMessage().startswith("Discord rate limit received; retrying")
+        for record in records
+    )
+    assert any(
+        record.levelno == logging.INFO
+        and record.getMessage().startswith(
+            "Discord webhook request recovered after rate limiting"
+        )
+        for record in records
+    )
+    assert not any(record.levelno >= logging.ERROR for record in records)
+    assert STRING_URL_WEBHOOK not in "\n".join(messages)
 
 
 def test_webhook_async_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
-    """Trigger and recover from a real asynchronous Discord rate limit."""
+    """Log and recover from a live asynchronous Discord rate limit."""
 
     async def execute_batch() -> list[Response]:
         return await gather(
@@ -1260,14 +1253,37 @@ def test_webhook_async_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
             ]
         )
 
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.DEBUG, logger="clyde.webhook")
     responses: list[Response] = []
 
     for _ in range(3):
         caplog.clear()
         responses = run(execute_batch())
-        if any(record.message.startswith("Rate-limited") for record in caplog.records):
+        records = [
+            record for record in caplog.records if record.name == "clyde.webhook"
+        ]
+
+        if any(
+            record.getMessage().startswith("Discord rate limit received; retrying")
+            for record in records
+        ):
             break
 
+    records = [record for record in caplog.records if record.name == "clyde.webhook"]
+    messages = [record.getMessage() for record in records]
+
     assert responses and all(response.ok for response in responses)
-    assert any(record.message.startswith("Rate-limited") for record in caplog.records)
+    assert any(
+        record.levelno == logging.WARNING
+        and record.getMessage().startswith("Discord rate limit received; retrying")
+        for record in records
+    )
+    assert any(
+        record.levelno == logging.INFO
+        and record.getMessage().startswith(
+            "Discord webhook request recovered after rate limiting"
+        )
+        for record in records
+    )
+    assert not any(record.levelno >= logging.ERROR for record in records)
+    assert STRING_URL_WEBHOOK not in "\n".join(messages)

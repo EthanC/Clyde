@@ -4,10 +4,12 @@ import logging
 from asyncio import sleep as async_sleep
 from base64 import b64encode
 from enum import IntEnum, StrEnum
+from math import isfinite
 from pathlib import Path
-from time import sleep
+from time import perf_counter, sleep
 from typing import Annotated, Any, Final, Iterable, Literal, Self, TypeAlias
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 from weakref import ReferenceType, ref
 
 import msgspec
@@ -46,6 +48,12 @@ TopLevelComponent: TypeAlias = (
 )
 TopLevelComponents: TypeAlias = list[TopLevelComponent]
 _Avatar: TypeAlias = UnsetType | None | str | bytes | Path
+_WebhookOperation: TypeAlias = Literal[
+    "execute", "get", "modify", "delete", "get_message", "edit_message"
+]
+_RatelimitDelaySource: TypeAlias = Literal["discord", "default"]
+_DEFAULT_RATELIMIT_DELAY: Final[float] = 5.0
+_logger = logging.getLogger(__name__)
 
 _EXECUTE_PAYLOAD_FIELDS: tuple[str, ...] = (
     "content",
@@ -512,7 +520,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
         )
 
-        return self._send_request("POST", self._base_url(), req)
+        return self._send_request("POST", self._base_url(), req, operation="execute")
 
     async def execute_async(self: Self) -> Response:
         """
@@ -532,7 +540,9 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
         )
 
-        return await self._send_request_async("POST", self._base_url(), req)
+        return await self._send_request_async(
+            "POST", self._base_url(), req, operation="execute"
+        )
 
     def get(self: Self) -> "Webhook":
         """
@@ -543,7 +553,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         Returns:
             webhook (Webhook): Webhook populated with Discord's response data.
         """
-        res: Response = self._send_request("GET", self._base_url(), {})
+        res: Response = self._send_request("GET", self._base_url(), {}, operation="get")
 
         return self._decode_webhook(res)
 
@@ -556,7 +566,9 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         Returns:
             webhook (Webhook): Webhook populated with Discord's response data.
         """
-        res: Response = await self._send_request_async("GET", self._base_url(), {})
+        res: Response = await self._send_request_async(
+            "GET", self._base_url(), {}, operation="get"
+        )
 
         return self._decode_webhook(res)
 
@@ -588,7 +600,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         """
         req: dict[str, Any] = self._modify_request(name, avatar, reason)
 
-        return self._send_request("PATCH", self._base_url(), req)
+        return self._send_request("PATCH", self._base_url(), req, operation="modify")
 
     async def modify_async(
         self: Self,
@@ -618,7 +630,9 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         """
         req: dict[str, Any] = self._modify_request(name, avatar, reason)
 
-        return await self._send_request_async("PATCH", self._base_url(), req)
+        return await self._send_request_async(
+            "PATCH", self._base_url(), req, operation="modify"
+        )
 
     def delete(self: Self, reason: str | None = None) -> Response:
         """
@@ -633,7 +647,10 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             res (Response): Response object for the deletion request.
         """
         return self._send_request(
-            "DELETE", self._base_url(), self._audit_log_request(reason)
+            "DELETE",
+            self._base_url(),
+            self._audit_log_request(reason),
+            operation="delete",
         )
 
     async def delete_async(self: Self, reason: str | None = None) -> Response:
@@ -649,7 +666,10 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             res (Response): Response object for the deletion request.
         """
         return await self._send_request_async(
-            "DELETE", self._base_url(), self._audit_log_request(reason)
+            "DELETE",
+            self._base_url(),
+            self._audit_log_request(reason),
+            operation="delete",
         )
 
     def get_message(self: Self, message_id: str) -> Message:
@@ -670,6 +690,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             "GET",
             self._message_url(message_id),
             {"params": self._build_query_params(_MESSAGE_QUERY_FIELDS)},
+            operation="get_message",
         )
 
         return self._decode_message(res)
@@ -692,6 +713,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             "GET",
             self._message_url(message_id),
             {"params": self._build_query_params(_MESSAGE_QUERY_FIELDS)},
+            operation="get_message",
         )
 
         return self._decode_message(res)
@@ -723,7 +745,9 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             _EDIT_PAYLOAD_FIELDS, _EDIT_QUERY_FIELDS, edit=True
         )
 
-        return self._send_request("PATCH", self._message_url(message_id), req)
+        return self._send_request(
+            "PATCH", self._message_url(message_id), req, operation="edit_message"
+        )
 
     async def edit_message_async(self: Self, message_id: str) -> Response:
         """
@@ -753,7 +777,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         )
 
         return await self._send_request_async(
-            "PATCH", self._message_url(message_id), req
+            "PATCH", self._message_url(message_id), req, operation="edit_message"
         )
 
     def set_content(
@@ -775,7 +799,14 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             max_len: int | None = Validation.get_max_length(Webhook, "content")
 
             if isinstance(max_len, int) and (len(content) > max_len):
-                self.add_attachment("message.txt", content.encode())
+                encoded_content: bytes = content.encode()
+                self.add_attachment("message.txt", encoded_content)
+                characters: int = len(content)
+                content_bytes: int = len(encoded_content)
+                limit: int = max_len
+                _logger.info(
+                    f"Added attachment fallback for oversized webhook content: {characters=:,}, {content_bytes=:,}, {limit=:,}"
+                )
 
                 return self
 
@@ -1542,6 +1573,20 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         if "components" in payload and "with_components" in query_fields:
             params["with_components"] = "True"
         attachments: list[Attachment] = self._valid_attachments()
+        total_count: int = len(self._attachments)
+        missing_filename_count: int = sum(
+            not isinstance(attachment.filename, str) for attachment in self._attachments
+        )
+        missing_content_count: int = sum(
+            not isinstance(attachment.content, bytes)
+            for attachment in self._attachments
+        )
+        invalid_count: int = total_count - len(attachments)
+
+        if invalid_count:
+            _logger.warning(
+                f"Skipping incomplete webhook attachments: {invalid_count=:,}, {total_count=:,}, {missing_filename_count=:,}, {missing_content_count=:,}"
+            )
 
         if attachments:
             files: dict[str, Any] = {"payload_json": (None, payload_json)}
@@ -1549,24 +1594,40 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             for index, attachment in enumerate(attachments):
                 files[f"files[{index}]"] = (attachment.filename, attachment.content)
 
-            return {"files": files, "params": params}
+            request: dict[str, Any] = {"files": files, "params": params}
+            transport: str = "multipart"
+        else:
+            request = {
+                "data": payload_json,
+                "params": params,
+                "headers": {"Content-Type": "application/json"},
+            }
+            transport = "json"
 
-        return {
-            "data": payload_json,
-            "params": params,
-            "headers": {"Content-Type": "application/json"},
-        }
+        if _logger.isEnabledFor(logging.DEBUG):
+            payload_fields: list[str] = sorted(payload)
+            query_fields: list[str] = sorted(params)
+            attachment_count: int = len(attachments)
+            attachment_bytes: int = sum(
+                len(attachment.content)
+                for attachment in attachments
+                if isinstance(attachment.content, bytes)
+            )
+            _logger.debug(
+                f"Built Discord webhook request: {transport=}, {edit=}, {payload_fields=}, {query_fields=}, {attachment_count=:,}, {attachment_bytes=:,}"
+            )
+
+        return request
 
     def _build_query_params(
         self: Self, query_fields: tuple[str, ...]
     ) -> dict[str, str]:
         """Return endpoint-specific query parameters."""
+        url_params: list[tuple[str, str]] = parse_qsl(
+            urlsplit(self.url).query, keep_blank_values=True
+        )
         params: dict[str, str] = {
-            key: value
-            for key, value in parse_qsl(
-                urlsplit(self.url).query, keep_blank_values=True
-            )
-            if key in query_fields
+            key: value for key, value in url_params if key in query_fields
         }
 
         params.update(
@@ -1576,6 +1637,17 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
                 if key in query_fields
             }
         )
+
+        if _logger.isEnabledFor(logging.DEBUG):
+            url_count: int = sum(key not in query_fields for key, _ in url_params)
+            stored_count: int = sum(
+                key not in query_fields for key in self._query_params
+            )
+
+            if url_count or stored_count:
+                _logger.debug(
+                    f"Ignored unsupported webhook query parameters: {url_count=:,}, {stored_count=:,}"
+                )
 
         return params
 
@@ -1639,6 +1711,33 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         try:
             return response.raise_for_status()
         except niquests.HTTPError as error:
+            details: list[str] = []
+            response_url: str = str(response.url) if response.url else ""
+            sensitive_values: set[str] = {response_url} if response_url else set()
+
+            if response_url:
+                path_parts: list[str] = [
+                    part for part in urlsplit(response_url).path.split("/") if part
+                ]
+
+                if "webhooks" in path_parts:
+                    webhook_index: int = path_parts.index("webhooks")
+                    token_index: int = webhook_index + 2
+
+                    if (
+                        token_index < len(path_parts)
+                        and len(path_parts[token_index]) >= 8
+                    ):
+                        sensitive_values.add(path_parts[token_index])
+
+            def redact_credentials(value: str) -> str:
+                redacted: str = value
+
+                for sensitive_value in sorted(sensitive_values, key=len, reverse=True):
+                    redacted = redacted.replace(sensitive_value, "<redacted>")
+
+                return redacted
+
             try:
                 response_data: Any = response.json()
             except niquests.JSONDecodeError:
@@ -1656,8 +1755,6 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
                             if key not in ("message", "code")
                         }
 
-                    details: list[str] = []
-
                     if isinstance(message, str):
                         code_text: str = (
                             f" {code}" if isinstance(code, (int, str)) else ""
@@ -1668,7 +1765,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
                     flattened_errors = flatten_errors(error_data)
                     details.extend(detail for _, _, detail in flattened_errors)
 
-                    if request is not None:
+                    if request is not None and _logger.isEnabledFor(logging.DEBUG):
                         payload_data: Any = request.get("data")
 
                         if payload_data is None:
@@ -1702,64 +1799,178 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
                                             else payload_piece[key]
                                         )
                                 except (IndexError, KeyError, TypeError, ValueError):
-                                    logging.debug(
-                                        "Discord request payload at %s: <missing>", path
+                                    _logger.debug(
+                                        f"Discord rejected request field: path={path[:512]!r}, value_present=False"
                                     )
                                 else:
-                                    logging.debug(
-                                        "Discord request payload at %s: %r",
-                                        path,
-                                        payload_piece,
-                                    )
+                                    value_type: str = type(payload_piece).__name__
 
-                    if details:
-                        detail_text: str = "\n".join(details)
-                        error.args = (f"{error}\n{detail_text}",)
+                                    if isinstance(
+                                        payload_piece, (str, bytes, list, tuple, dict)
+                                    ):
+                                        value_length: int = len(payload_piece)
+                                        _logger.debug(
+                                            f"Discord rejected request field: path={path[:512]!r}, {value_type=}, {value_length=:,}"
+                                        )
+                                    else:
+                                        _logger.debug(
+                                            f"Discord rejected request field: path={path[:512]!r}, {value_type=}"
+                                        )
+
+            status_code: int | None = response.status_code
+            reason: str = (
+                response.reason
+                if isinstance(response.reason, str) and response.reason
+                else "Unknown"
+            )
+            error_text: str = (
+                f"Discord webhook request failed: {status_code=}, {reason=}"
+            )
+
+            if details:
+                safe_details: list[str] = [
+                    redact_credentials(detail) for detail in details
+                ]
+                detail_text: str = "\n".join(safe_details)
+                error_text = f"{error_text}\n{detail_text}"
+
+            error.args = (error_text,)
 
             raise
 
     def _send_request(
-        self: Self, method: str, url: str, request: dict[str, Any]
+        self: Self,
+        method: str,
+        url: str,
+        request: dict[str, Any],
+        *,
+        operation: _WebhookOperation,
     ) -> Response:
         """Send a synchronous Webhook request with rate-limit retries."""
+        request_id: str = uuid4().hex
+        attempt: int = 1
+        retry_count: int = 0
+        total_delay_s: float = 0.0
+
         with Session() as session:
-            response: Response = session.request(method, url, **request)
+            while True:
+                _logger.debug(
+                    f"Sending Discord webhook request: {request_id=}, {operation=}, {method=}, {attempt=:,}"
+                )
+                started_at: float = perf_counter()
 
-            logging.debug(f"{response.request=}")
-            logging.debug(f"{response.status_code=} {response.text=}")
+                try:
+                    response: Response = session.request(method, url, **request)
+                except niquests.RequestException as error:
+                    elapsed_ms: float = (perf_counter() - started_at) * 1000
+                    error_type: str = type(error).__name__
+                    _logger.debug(
+                        f"Discord webhook transport failed: {request_id=}, {operation=}, {method=}, {attempt=:,}, {error_type=}, {elapsed_ms=:,.1f}"
+                    )
+                    raise
 
-            while response.status_code == 429:
-                sleep(self._ratelimit_retry(response))
+                elapsed_ms = (perf_counter() - started_at) * 1000
+                status_code: int | None = response.status_code
+                response_bytes: int = len(response.content or b"")
+                _logger.debug(
+                    f"Discord webhook response received: {request_id=}, {operation=}, {method=}, {attempt=:,}, {status_code=}, {elapsed_ms=:,.1f}, {response_bytes=:,}"
+                )
 
-                response = session.request(method, url, **request)
+                if status_code != 429:
+                    break
+
+                delay_s, delay_source = self._ratelimit_retry(response)
+                _logger.warning(
+                    f"Discord rate limit received; retrying: {request_id=}, {operation=}, {attempt=:,}, {delay_s=:,.3f}, {delay_source=}"
+                )
+                sleep(delay_s)
+                total_delay_s += delay_s
+                retry_count += 1
+                attempt += 1
+
+            if retry_count and response.ok:
+                final_status_code: int | None = response.status_code
+                _logger.info(
+                    f"Discord webhook request recovered after rate limiting: {request_id=}, {operation=}, {retry_count=:,}, {total_delay_s=:,.3f}, {final_status_code=}"
+                )
 
             return self._raise_for_status(response, request)
 
     async def _send_request_async(
-        self: Self, method: str, url: str, request: dict[str, Any]
+        self: Self,
+        method: str,
+        url: str,
+        request: dict[str, Any],
+        *,
+        operation: _WebhookOperation,
     ) -> Response:
         """Send an asynchronous Webhook request with rate-limit retries."""
+        request_id: str = uuid4().hex
+        attempt: int = 1
+        retry_count: int = 0
+        total_delay_s: float = 0.0
+
         async with AsyncSession() as session:
-            response: Response = await session.request(method, url, **request)
+            while True:
+                _logger.debug(
+                    f"Sending Discord webhook request: {request_id=}, {operation=}, {method=}, {attempt=:,}"
+                )
+                started_at: float = perf_counter()
 
-            logging.debug(f"{response.request=}")
-            logging.debug(f"{response.status_code=} {response.text=}")
+                try:
+                    response: Response = await session.request(method, url, **request)
+                except niquests.RequestException as error:
+                    elapsed_ms: float = (perf_counter() - started_at) * 1000
+                    error_type: str = type(error).__name__
+                    _logger.debug(
+                        f"Discord webhook transport failed: {request_id=}, {operation=}, {method=}, {attempt=:,}, {error_type=}, {elapsed_ms=:,.1f}"
+                    )
+                    raise
 
-            while response.status_code == 429:
-                await async_sleep(self._ratelimit_retry(response))
+                elapsed_ms = (perf_counter() - started_at) * 1000
+                status_code: int | None = response.status_code
+                response_bytes: int = len(response.content or b"")
+                _logger.debug(
+                    f"Discord webhook response received: {request_id=}, {operation=}, {method=}, {attempt=:,}, {status_code=}, {elapsed_ms=:,.1f}, {response_bytes=:,}"
+                )
 
-                response = await session.request(method, url, **request)
+                if status_code != 429:
+                    break
+
+                delay_s, delay_source = self._ratelimit_retry(response)
+                _logger.warning(
+                    f"Discord rate limit received; retrying: {request_id=}, {operation=}, {attempt=:,}, {delay_s=:,.3f}, {delay_source=}"
+                )
+                await async_sleep(delay_s)
+                total_delay_s += delay_s
+                retry_count += 1
+                attempt += 1
+
+            if retry_count and response.ok:
+                final_status_code: int | None = response.status_code
+                _logger.info(
+                    f"Discord webhook request recovered after rate limiting: {request_id=}, {operation=}, {retry_count=:,}, {total_delay_s=:,.3f}, {final_status_code=}"
+                )
 
             return self._raise_for_status(response, request)
 
-    def _ratelimit_retry(self: Self, res: Response) -> float:
-        """Return the amount of time to wait after encountering a ratelimit."""
-        delay: float = 5.0
-        res_data: Any = res.json()
+    @staticmethod
+    def _ratelimit_retry(res: Response) -> tuple[float, _RatelimitDelaySource]:
+        """Return a validated rate-limit delay and its source."""
+        try:
+            res_data: Any = res.json()
+        except (niquests.JSONDecodeError, TypeError, ValueError):
+            return _DEFAULT_RATELIMIT_DELAY, "default"
 
-        if isinstance(res_data, dict) and res_data.get("retry_after"):
-            delay = res_data["retry_after"]
+        if isinstance(res_data, dict):
+            retry_after: Any = res_data.get("retry_after")
 
-        logging.warning(f"Rate-limited, sleeping for {delay:,}s...")
+            if (
+                isinstance(retry_after, (int, float))
+                and not isinstance(retry_after, bool)
+                and isfinite(retry_after)
+                and retry_after >= 0
+            ):
+                return float(retry_after), "discord"
 
-        return delay
+        return _DEFAULT_RATELIMIT_DELAY, "default"

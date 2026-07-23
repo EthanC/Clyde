@@ -110,6 +110,23 @@ relay.execute()
 
 ![Preview](/assets/readme_example_embed.png)
 
+## Logging
+
+Clyde emits records under the `clyde` logger. Webhook request records use
+`clyde.webhook`. The library does not set an application log level or output handler.
+
+```py
+import logging
+
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("clyde").setLevel(logging.DEBUG)
+```
+
+`DEBUG` records contain request metadata, timings, status codes, and byte counts.
+`INFO` records report content fallbacks and recovery after rate limiting. `WARNING`
+records report retries and skipped incomplete Attachments. Clyde does not log webhook
+credentials, request or response bodies, message content, or attachment data.
+
 ## Releases
 
 Clyde loosely follows [Semantic Versioning](https://semver.org/) for consistent, predictable releases.
