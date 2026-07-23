@@ -499,8 +499,12 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
 
         Returns:
             res (Response): Response object for the execution request.
+
+        Raises:
+            ValueError: The Webhook has no content, Embeds, Components, file, or Poll.
         """
         self._validate()
+
         req: dict[str, Any] = self._build_request(
             _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
         )
@@ -515,8 +519,12 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
 
         Returns:
             res (Response): Response object for the execution request.
+
+        Raises:
+            ValueError: The Webhook has no content, Embeds, Components, file, or Poll.
         """
         self._validate()
+
         req: dict[str, Any] = self._build_request(
             _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
         )
@@ -1199,6 +1207,19 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
     def _validate(self: Self, edit: bool = False) -> None:
         """Convert applicable data types prior to Webhook serialization."""
         self._sync_component_owners()
+
+        if not edit and not any(
+            (
+                isinstance(self.content, str) and bool(self.content),
+                isinstance(self.embeds, list) and bool(self.embeds),
+                isinstance(self.components, list) and bool(self.components),
+                bool(self._valid_attachments()),
+                isinstance(self.poll, Poll),
+            )
+        ):
+            raise ValueError(
+                "Webhook execution requires at least one of content, embeds, components, file, or poll"
+            )
 
         if isinstance(self.embeds, list):
             for embed in self.embeds:

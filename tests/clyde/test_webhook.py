@@ -296,19 +296,27 @@ def test_webhook_execute_ratelimit() -> None:
     assert isinstance(res, Response) and res.ok
 
 
-@pytest.mark.xfail
-def test_webhook_execute_fail() -> None:
-    """
-    A test-case to validate the failure to execute a minimal Webhook instance.
-    """
-    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+def test_webhook_execute_requires_message() -> None:
+    """Reject execution without a message field before sending a request."""
+    webhooks: list[Webhook] = [
+        Webhook(url=STRING_URL_WEBHOOK),
+        Webhook(url=STRING_URL_WEBHOOK, content=None, embeds=None, components=None),
+        Webhook(url=STRING_URL_WEBHOOK, content=STRING_EMPTY, embeds=[], components=[]),
+    ]
+    error = "at least one of content, embeds, components, file, or poll"
 
-    webhook.set_content(STRING_EMPTY)
+    with patch.object(Webhook, "_send_request") as send:
+        for webhook in webhooks:
+            with pytest.raises(ValueError, match=error):
+                webhook.execute()
 
-    res: Response = webhook.execute()
+        send.assert_not_called()
 
-    # Webhook execution is expected to fail due to empty string
-    assert isinstance(res, Response) and res.ok
+    with patch.object(Webhook, "_send_request_async", new_callable=AsyncMock) as send:
+        with pytest.raises(ValueError, match=error):
+            run(Webhook(url=STRING_URL_WEBHOOK).execute_async())
+
+        send.assert_not_awaited()
 
 
 def test_webhook_set_content() -> None:
