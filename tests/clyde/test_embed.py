@@ -1,3 +1,4 @@
+from copy import copy, deepcopy
 from datetime import UTC, datetime
 from time import sleep
 from typing import Any, cast
@@ -30,6 +31,8 @@ from .constants import (
     STRING_URL_ICON_2,
     STRING_URL_ICON_4,
     STRING_URL_IMAGE_1,
+    STRING_URL_IMAGE_2,
+    STRING_URL_IMAGE_3,
     STRING_URL_IMAGE_4,
     STRING_URL_WEBHOOK,
     STRING_WORD,
@@ -85,6 +88,64 @@ def test_embed() -> None:
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok
+
+
+def test_embed_image_gallery() -> None:
+    """Validate transparent multi-image Embed galleries against Discord."""
+    images: list[EmbedImage] = [
+        EmbedImage(url=url)
+        for url in (
+            STRING_URL_IMAGE_1,
+            STRING_URL_IMAGE_2,
+            STRING_URL_IMAGE_3,
+            STRING_URL_IMAGE_4,
+        )
+    ]
+    gallery: Embed = Embed(title=STRING_SHORT)
+    linked_gallery: Embed = Embed(description=STRING_EXTRA_SHORT, url=STRING_URL_GITHUB)
+
+    assert gallery.add_image([]) is gallery
+    assert gallery.add_image(images[0]) is gallery
+    assert gallery.add_image(images[1:]) is gallery
+    assert linked_gallery.add_image(images[:2]) is linked_gallery
+
+    with pytest.raises(ValueError, match="more than 4 images"):
+        gallery.add_image(EmbedImage(url=STRING_URL_ICON_1))
+
+    copied_gallery: Embed = copy(gallery)
+    copied_linked_gallery: Embed = deepcopy(linked_gallery)
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK).set_wait(True)
+    webhook.add_embed([copied_gallery, copied_linked_gallery])
+    res: Response = webhook.execute()
+    response_embeds: list[dict[str, Any]] = res.json()["embeds"]
+
+    assert isinstance(res, Response) and res.ok
+    assert isinstance(webhook.embeds, list)
+    assert len(webhook.embeds) == 2
+    assert len(response_embeds) == 6
+    assert [embed["url"] for embed in response_embeds[:4]] == [STRING_URL_IMAGE_1] * 4
+    assert [embed["url"] for embed in response_embeds[4:]] == [STRING_URL_GITHUB] * 2
+    assert [embed["image"]["url"] for embed in response_embeds] == [
+        STRING_URL_IMAGE_1,
+        STRING_URL_IMAGE_2,
+        STRING_URL_IMAGE_3,
+        STRING_URL_IMAGE_4,
+        STRING_URL_IMAGE_1,
+        STRING_URL_IMAGE_2,
+    ]
+    assert response_embeds[0]["title"] == STRING_SHORT
+    assert all("title" not in embed for embed in response_embeds[1:])
+    assert response_embeds[4]["description"] == STRING_EXTRA_SHORT
+    assert "description" not in response_embeds[5]
+
+    oversized: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    oversized.add_embed([Embed().add_image(images) for _ in range(3)])
+
+    with pytest.raises(ValueError, match="more than 10 Embeds"):
+        oversized.execute()
+
+    assert gallery.remove_image() is gallery
+    assert gallery.image is UNSET
 
 
 def test_embed_timestamp_string() -> None:

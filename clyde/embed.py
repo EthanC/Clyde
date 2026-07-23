@@ -1,11 +1,16 @@
 """Define the Embed class and its associates."""
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Final, Self
+from typing import Annotated, Any, Final, Self, cast
 
 import msgspec
 from msgspec import UNSET, Meta, Struct, UnsetType
+
+from clyde.constants import EMBED_IMAGE_MAX_COUNT
+
+_ADDITIONAL_IMAGES_KEY: Final[str] = "_clyde_additional_images"
 
 
 class EmbedTypes(StrEnum):
@@ -237,7 +242,7 @@ class EmbedField(Struct, kw_only=True):
     """Whether or not this field should display inline."""
 
 
-class Embed(Struct, kw_only=True):
+class Embed(Struct, kw_only=True, dict=True):
     """
     Represent a Discord Embed of the Rich type.
 
@@ -258,7 +263,8 @@ class Embed(Struct, kw_only=True):
 
         footer (UnsetType | EmbedFooter): Footer information.
 
-        image (UnsetType | EmbedImage): Image information.
+        image (UnsetType | EmbedImage): Primary image information. Up to four images
+            can be added with ``add_image``.
 
         thumbnail (UnsetType | EmbedThumbnail): Thumbnail information.
 
@@ -293,7 +299,7 @@ class Embed(Struct, kw_only=True):
     """Footer information."""
 
     image: UnsetType | EmbedImage = msgspec.field(default=UNSET)
-    """Image information."""
+    """Primary image information."""
 
     thumbnail: UnsetType | EmbedThumbnail = msgspec.field(default=UNSET)
     """Thumbnail information."""
@@ -305,6 +311,59 @@ class Embed(Struct, kw_only=True):
         UnsetType | Annotated[list[EmbedField], Meta(min_length=1, max_length=25)]
     ) = msgspec.field(default=UNSET)
     """Fields information, max of 25."""
+
+    def __copy__(self: Self) -> Self:
+        """Create a shallow copy that retains additional gallery images."""
+        copied: Self = msgspec.structs.replace(self)
+        copied.__dict__[_ADDITIONAL_IMAGES_KEY] = self.__dict__.get(
+            _ADDITIONAL_IMAGES_KEY, []
+        ).copy()
+
+        return copied
+
+    def __deepcopy__(self: Self, memo: dict[int, Any]) -> Self:
+        """Create a deep copy that retains additional gallery images."""
+        copied: Self = msgspec.structs.replace(self)
+        memo[id(self)] = copied
+
+        for field in msgspec.structs.fields(type(self)):
+            setattr(copied, field.name, deepcopy(getattr(self, field.name), memo))
+
+        copied.__dict__[_ADDITIONAL_IMAGES_KEY] = deepcopy(
+            self.__dict__.get(_ADDITIONAL_IMAGES_KEY, []), memo
+        )
+
+        return copied
+
+    def _images(self: Self) -> list[EmbedImage]:
+        """Return every image associated with the Embed in display order."""
+        additional_images: list[EmbedImage] = cast(
+            list[EmbedImage], self.__dict__.get(_ADDITIONAL_IMAGES_KEY, [])
+        )
+        images: list[EmbedImage] = additional_images.copy()
+
+        if isinstance(self.image, EmbedImage):
+            images.insert(0, self.image)
+
+        return images
+
+    def _payload_embeds(self: Self) -> list["Embed"]:
+        """Expand an image gallery into the Embeds expected by Discord."""
+        images: list[EmbedImage] = self._images()
+
+        if len(images) < 2:
+            return [self]
+
+        gallery_url: str = self.url if isinstance(self.url, str) else images[0].url
+        primary: Embed = msgspec.structs.replace(self, url=gallery_url, image=images[0])
+
+        return [
+            primary,
+            *[
+                Embed(url=gallery_url, image=gallery_image)
+                for gallery_image in images[1:]
+            ],
+        ]
 
     def set_title(self: Self, title: str) -> "Embed":
         """
@@ -461,28 +520,54 @@ class Embed(Struct, kw_only=True):
 
         return self
 
-    def add_image(self: Self, image: EmbedImage) -> "Embed":
+    def add_image(self: Self, image: EmbedImage | list[EmbedImage]) -> "Embed":
         """
-        Add an image to the Embed.
+        Add one or more images to the Embed, up to a maximum of four.
+
+        Clyde transparently expands multiple images into matching Embeds so Discord
+        clients render them as one image gallery.
 
         Arguments:
-            image (EmbedImage): An Embed Image.
+            image (EmbedImage | list[EmbedImage]): An Embed Image or list of Embed
+                Images.
 
         Returns:
             self (Embed): The modified Embed instance.
+
+        Raises:
+            ValueError: The addition would exceed the four image limit.
         """
-        self.image = image
+        images: list[EmbedImage] = [image] if isinstance(image, EmbedImage) else image
+
+        if len(self._images()) + len(images) > EMBED_IMAGE_MAX_COUNT:
+            raise ValueError(
+                f"Embeds cannot contain more than {EMBED_IMAGE_MAX_COUNT} images"
+            )
+
+        if not images:
+            return self
+
+        if not isinstance(self.image, EmbedImage):
+            self.image = images[0]
+            images = images[1:]
+
+        if images:
+            additional_images: list[EmbedImage] = cast(
+                list[EmbedImage], self.__dict__.setdefault(_ADDITIONAL_IMAGES_KEY, [])
+            )
+            additional_images.extend(images)
 
         return self
 
     def remove_image(self: Self) -> "Embed":
         """
-        Remove an image from the Embed.
+        Remove all images from the Embed.
 
         Returns:
             self (Embed): The modified Embed instance.
         """
         self.image = UNSET
+        self.__dict__.pop(_ADDITIONAL_IMAGES_KEY, None)
 
         return self
 

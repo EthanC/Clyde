@@ -34,6 +34,7 @@ from clyde.components.text_display import TextDisplay
 from clyde.constants import (
     ATTACHMENT_DESCRIPTION_MAX_LENGTH,
     MESSAGE_COMPONENT_MAX_COUNT,
+    MESSAGE_EMBED_MAX_COUNT,
 )
 from clyde.embed import Embed
 from clyde.message import Message
@@ -449,9 +450,11 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
     tts: UnsetType | bool = msgspec.field(default=UNSET)
     """True if this is a TTS message."""
 
-    embeds: UnsetType | None | Annotated[list[Embed], Meta(max_length=10)] = (
-        msgspec.field(default=UNSET)
-    )
+    embeds: (
+        UnsetType
+        | None
+        | Annotated[list[Embed], Meta(max_length=MESSAGE_EMBED_MAX_COUNT)]
+    ) = msgspec.field(default=UNSET)
     """Embedded rich content."""
 
     allowed_mentions: UnsetType | None | AllowedMentions = msgspec.field(default=UNSET)
@@ -1222,6 +1225,13 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             )
 
         if isinstance(self.embeds, list):
+            embed_count: int = len(self._expand_embeds(self.embeds))
+
+            if embed_count > MESSAGE_EMBED_MAX_COUNT:
+                raise ValueError(
+                    f"Webhook messages cannot contain more than {MESSAGE_EMBED_MAX_COUNT:,} Embeds after expanding image galleries"
+                )
+
             for embed in self.embeds:
                 if not isinstance(embed.color, UnsetType):
                     embed.color = Validation.convert_color(embed.color)
@@ -1470,6 +1480,9 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             ):
                 continue
 
+            if field == "embeds" and isinstance(value, list):
+                value = self._expand_embeds(value)
+
             payload[field] = value
         attachments: list[Attachment] = self._valid_attachments()
         attachment_requests: list[_AttachmentRequest] = [
@@ -1490,6 +1503,15 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
             payload["attachments"] = attachment_requests
 
         return payload
+
+    @staticmethod
+    def _expand_embeds(embeds: list[Embed]) -> list[Embed]:
+        """Expand logical Embed image galleries into Discord payload Embeds."""
+        return [
+            payload_embed
+            for embed in embeds
+            for payload_embed in embed._payload_embeds()
+        ]
 
     @staticmethod
     def _strip_internal_fields(value: Any) -> Any:
