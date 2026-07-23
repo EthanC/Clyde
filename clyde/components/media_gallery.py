@@ -9,7 +9,7 @@ from clyde.component import Component, ComponentTypes
 from clyde.components.unfurled_media_item import UnfurledMediaItem
 
 
-class MediaGalleryItem(Struct, kw_only=True, tag="MediaGalleryItem"):
+class MediaGalleryItem(Struct, kw_only=True):
     """
     Represent a Media Gallery Item to be used within a Media Gallery Component.
 

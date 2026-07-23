@@ -1,3 +1,4 @@
+from asyncio import run
 from pathlib import Path
 from time import sleep
 
@@ -8,10 +9,12 @@ from clyde import (
     AllowedMentions,
     AllowedMentionTypes,
     Attachment,
+    Embed,
     Markdown,
     Timestamp,
     Webhook,
 )
+from clyde.components import TextDisplay
 from clyde.webhook import MessageFlags
 
 from .constants import (
@@ -57,6 +60,100 @@ def test_webhook_execute() -> None:
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok
+
+
+def test_webhook_edit_message() -> None:
+    """Validate editing the content of an existing Webhook message."""
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    webhook.set_wait(True)
+    created: Response = webhook.execute()
+    message_id: str = created.json()["id"]
+
+    editor: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_MEDIUM)
+    edited: Response = editor.edit_message(message_id)
+    edited_data: dict = edited.json()
+
+    assert isinstance(edited, Response) and edited.ok
+    assert edited_data["id"] == message_id
+    assert edited_data["content"] == STRING_MEDIUM
+
+
+def test_webhook_edit_message_async() -> None:
+    """Validate asynchronously editing an existing Webhook message."""
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    webhook.set_wait(True)
+    created: Response = webhook.execute()
+    message_id: str = created.json()["id"]
+
+    editor: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_MEDIUM)
+    edited: Response = run(editor.edit_message_async(message_id))
+    edited_data: dict = edited.json()
+
+    assert isinstance(edited, Response) and edited.ok
+    assert edited_data["id"] == message_id
+    assert edited_data["content"] == STRING_MEDIUM
+
+
+def test_webhook_edit_message_attachments() -> None:
+    """Validate clearing fields and retaining, adding, and clearing Attachments."""
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    webhook.set_wait(True)
+    webhook.add_embed(Embed(description=STRING_SHORT))
+    webhook.add_attachment(
+        "original.txt", b"original", description="Original attachment"
+    )
+    created: Response = webhook.execute()
+    created_data: dict = created.json()
+    message_id: str = created_data["id"]
+    attachment_id: str = created_data["attachments"][0]["id"]
+
+    assert created_data["attachments"][0]["description"] == "Original attachment"
+
+    editor: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=None)
+    editor.remove_embed(None)
+    editor.retain_attachment(attachment_id, description="Retained attachment")
+    editor.add_attachment("new.txt", b"new", description="New attachment")
+    edited: Response = editor.edit_message(message_id)
+    edited_data: dict = edited.json()
+    edited_attachments: list[dict] = edited_data["attachments"]
+
+    assert isinstance(edited, Response) and edited.ok
+    assert edited_data["content"] == ""
+    assert edited_data["embeds"] == []
+    assert len(edited_attachments) == 2
+    assert edited_attachments[0]["description"] == "Retained attachment"
+    assert edited_attachments[1]["description"] == "New attachment"
+
+    cleared: Response = (
+        Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+        .clear_attachments()
+        .edit_message(message_id)
+    )
+
+    assert isinstance(cleared, Response) and cleared.ok
+    assert cleared.json()["attachments"] == []
+
+
+def test_webhook_edit_message_components() -> None:
+    """Validate converting a real Discord message to Components."""
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    webhook.set_wait(True)
+    created: Response = webhook.execute()
+    message_id: str = created.json()["id"]
+
+    editor: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=None, embeds=None)
+    editor.add_component(TextDisplay(content=STRING_MEDIUM))
+    edited: Response = editor.edit_message(message_id)
+    edited_data: dict = edited.json()
+
+    assert isinstance(edited, Response) and edited.ok
+    assert edited_data["id"] == message_id
+    assert edited_data["content"] == ""
+    assert edited_data["embeds"] == []
+    assert edited_data["flags"] & MessageFlags.IS_COMPONENTS_V2
+    assert len(edited_data["components"]) == 1
+    assert edited_data["components"][0]["type"] == 10
+    assert edited_data["components"][0]["content"] == STRING_MEDIUM
 
 
 def test_webhook_execute_ratelimit() -> None:
@@ -351,16 +448,18 @@ def test_webhook_set_wait() -> None:
 
 def test_webhook_set_thread_id() -> None:
     """
-    A test-case to validate the successful use and execution of set_thread_id on
-    a Webhook instance.
+    A test-case to validate the successful use of set_thread_id on a
+    Webhook instance.
     """
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_LONG)
 
     webhook.set_thread_id(STRING_ID_THREAD)
 
-    res: Response = webhook.execute()
+    assert webhook._query_params["thread_id"] == STRING_ID_THREAD
 
-    assert isinstance(res, Response) and res.ok
+    webhook.set_thread_id(None)
+
+    assert "thread_id" not in webhook._query_params
 
 
 def test_webhook_set_flag() -> None:

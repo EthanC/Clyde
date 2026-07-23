@@ -5,7 +5,8 @@ from asyncio import sleep as async_sleep
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from time import sleep
-from typing import Annotated, Any, Iterable, Literal, Self, Tuple, TypeAlias
+from typing import Annotated, Any, Iterable, Literal, Self, TypeAlias
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import msgspec
 import niquests
@@ -20,6 +21,7 @@ from clyde.components.media_gallery import MediaGallery
 from clyde.components.section import Section
 from clyde.components.seperator import Seperator
 from clyde.components.text_display import TextDisplay
+from clyde.constants import ATTACHMENT_DESCRIPTION_MAX_LENGTH
 from clyde.embed import Embed
 from clyde.poll import Poll
 from clyde.validation import Validation
@@ -28,6 +30,48 @@ TopLevelComponent: TypeAlias = (
     ActionRow | Container | File | MediaGallery | Section | Seperator | TextDisplay
 )
 TopLevelComponents: TypeAlias = list[TopLevelComponent]
+
+_EXECUTE_PAYLOAD_FIELDS: tuple[str, ...] = (
+    "content",
+    "username",
+    "avatar_url",
+    "tts",
+    "embeds",
+    "allowed_mentions",
+    "components",
+    "flags",
+    "thread_name",
+    "applied_tags",
+    "poll",
+)
+_EDIT_PAYLOAD_FIELDS: tuple[str, ...] = (
+    "content",
+    "embeds",
+    "allowed_mentions",
+    "components",
+    "flags",
+    "poll",
+)
+_EXECUTE_QUERY_FIELDS: tuple[str, ...] = ("wait", "thread_id", "with_components")
+_EDIT_QUERY_FIELDS: tuple[str, ...] = ("thread_id", "with_components")
+
+
+class _AttachmentRequest(Struct, kw_only=True):
+    """Represent attachment metadata in a Discord message request."""
+
+    id: str | int = msgspec.field()
+    """Existing Attachment ID or numeric placeholder for a new upload."""
+
+    filename: UnsetType | str = msgspec.field(default=UNSET)
+    """Name of a newly uploaded file."""
+
+    description: (
+        UnsetType | Annotated[str, Meta(max_length=ATTACHMENT_DESCRIPTION_MAX_LENGTH)]
+    ) = msgspec.field(default=UNSET)
+    """Description (alt text) for the Attachment."""
+
+    is_spoiler: UnsetType | bool = msgspec.field(default=UNSET)
+    """Whether the file should be a spoiler (blurred)."""
 
 
 class AllowedMentionTypes(StrEnum):
@@ -328,7 +372,7 @@ class Webhook(Struct, kw_only=True):
     url: str = msgspec.field()
     """The URL used for executing the Webhook."""
 
-    content: UnsetType | Annotated[str, Meta(max_length=2000)] = msgspec.field(
+    content: UnsetType | None | Annotated[str, Meta(max_length=2000)] = msgspec.field(
         default=UNSET
     )
     """The message contents (up to 2000 characters)."""
@@ -342,18 +386,20 @@ class Webhook(Struct, kw_only=True):
     tts: UnsetType | bool = msgspec.field(default=UNSET)
     """True if this is a TTS message."""
 
-    embeds: UnsetType | Annotated[list[Embed], Meta(min_length=1, max_length=10)] = (
+    embeds: UnsetType | None | Annotated[list[Embed], Meta(max_length=10)] = (
         msgspec.field(default=UNSET)
     )
     """Embedded rich content."""
 
-    allowed_mentions: UnsetType | AllowedMentions = msgspec.field(default=UNSET)
+    allowed_mentions: UnsetType | None | AllowedMentions = msgspec.field(default=UNSET)
     """Allowed mentions for the message."""
 
-    components: UnsetType | list[TopLevelComponent] = msgspec.field(default=UNSET)
+    components: UnsetType | None | list[TopLevelComponent] = msgspec.field(
+        default=UNSET
+    )
     """The Components to include with the message."""
 
-    flags: UnsetType | int = msgspec.field(default=UNSET)
+    flags: UnsetType | None | int = msgspec.field(default=UNSET)
     """Message Flags combined as a bitfield."""
 
     thread_name: UnsetType | str = msgspec.field(default=UNSET)
@@ -368,6 +414,9 @@ class Webhook(Struct, kw_only=True):
     _attachments: list[Attachment] = []
     """Attachment objects to include with the payload."""
 
+    _attachment_manifest: UnsetType | list[_AttachmentRequest] = UNSET
+    """Existing Attachments to retain when editing a message."""
+
     _query_params: dict[str, str] = {}
     """Additional query parameters to append to the URL."""
 
@@ -381,21 +430,11 @@ class Webhook(Struct, kw_only=True):
             res (Response): Response object for the execution request.
         """
         self._validate()
+        req: dict[str, Any] = self._build_request(
+            _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
+        )
 
-        with Session() as ses:
-            req: dict[str, Any] = self._build_request()
-            res: Response = ses.post(self.url, **req)
-
-            logging.debug(f"{res.request=}")
-            logging.debug(f"{res.status_code=} {res.text=}")
-
-            # HTTP 429 Too Many Requests
-            while res.status_code == 429:
-                sleep(self._ratelimit_retry(res))
-
-                res = ses.post(self.url, **req)
-
-            return res.raise_for_status()
+        return self._send_request("POST", self._base_url(), req)
 
     async def execute_async(self: Self) -> Response:
         """
@@ -407,30 +446,80 @@ class Webhook(Struct, kw_only=True):
             res (Response): Response object for the execution request.
         """
         self._validate()
+        req: dict[str, Any] = self._build_request(
+            _EXECUTE_PAYLOAD_FIELDS, _EXECUTE_QUERY_FIELDS
+        )
 
-        async with AsyncSession() as ses:
-            req: dict[str, Any] = self._build_request()
-            res: Response = await ses.post(self.url, **req)
+        return await self._send_request_async("POST", self._base_url(), req)
 
-            logging.debug(f"{res.request=}")
-            logging.debug(f"{res.status_code=} {res.text=}")
+    def edit_message(self: Self, message_id: str) -> Response:
+        """
+        Edit a message previously sent by this Webhook.
 
-            # HTTP 429 Too Many Requests
-            while res.status_code == 429:
-                await async_sleep(self._ratelimit_retry(res))
+        Fields left as ``UNSET`` remain unchanged. Use ``None`` for nullable fields and
+        empty lists for arrays to clear existing values.
+        When adding Components to a legacy message, explicitly clear its existing
+        content and Embeds as required by Discord. Existing Attachments may remain
+        when retained and referenced by a compatible Component.
+        Before uploading files, call ``retain_attachment`` for every existing file that
+        should remain, or call ``clear_attachments`` before adding replacement files.
 
-                res = await ses.post(self.url, **req)
+        https://discord.com/developers/docs/resources/webhook#edit-webhook-message
 
-            return res.raise_for_status()
+        Arguments:
+            message_id (str): ID of the message to edit.
+
+        Returns:
+            res (Response): Response object containing the edited message.
+        """
+        self._validate(edit=True)
+        self._validate_edit(message_id)
+
+        req: dict[str, Any] = self._build_request(
+            _EDIT_PAYLOAD_FIELDS, _EDIT_QUERY_FIELDS, edit=True
+        )
+
+        return self._send_request("PATCH", self._message_url(message_id), req)
+
+    async def edit_message_async(self: Self, message_id: str) -> Response:
+        """
+        Asynchronously edit a message previously sent by this Webhook.
+
+        Fields left as ``UNSET`` remain unchanged. Use ``None`` for nullable fields and
+        empty lists for arrays to clear existing values.
+        When adding Components to a legacy message, explicitly clear its existing
+        content and Embeds as required by Discord. Existing Attachments may remain
+        when retained and referenced by a compatible Component.
+        Before uploading files, call ``retain_attachment`` for every existing file that
+        should remain, or call ``clear_attachments`` before adding replacement files.
+
+        https://discord.com/developers/docs/resources/webhook#edit-webhook-message
+
+        Arguments:
+            message_id (str): ID of the message to edit.
+
+        Returns:
+            res (Response): Response object containing the edited message.
+        """
+        self._validate(edit=True)
+        self._validate_edit(message_id)
+
+        req: dict[str, Any] = self._build_request(
+            _EDIT_PAYLOAD_FIELDS, _EDIT_QUERY_FIELDS, edit=True
+        )
+
+        return await self._send_request_async(
+            "PATCH", self._message_url(message_id), req
+        )
 
     def set_content(
-        self: Self, content: UnsetType | str, fallback: bool = False
+        self: Self, content: UnsetType | None | str, fallback: bool = False
     ) -> "Webhook":
         """
         Set the message content of the Webhook.
 
         Arguments:
-            content (str): Message content. If set to None, the message content
+            content (str | None): Message content. If set to None, the message content
                 is cleared.
             fallback (bool): Set the content as a file Attachment if the message
                 length limit is exceeded.
@@ -502,7 +591,7 @@ class Webhook(Struct, kw_only=True):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if isinstance(self.embeds, UnsetType):
+        if not isinstance(self.embeds, list):
             self.embeds = []
 
         if isinstance(embed, Embed):
@@ -512,18 +601,21 @@ class Webhook(Struct, kw_only=True):
 
         return self
 
-    def remove_embed(self: Self, embed: Embed | list[Embed] | int) -> "Webhook":
+    def remove_embed(self: Self, embed: Embed | list[Embed] | int | None) -> "Webhook":
         """
         Remove embedded rich content from the Webhook instance.
 
         Arguments:
-            embed (Embed | list[Embed] | int | None): An Embed, list of Embeds, or an index
-                to remove. If set to None, all Embeds are removed.
+            embed (Embed | list[Embed] | int | None): An Embed, list of Embeds, or an
+                index to remove. If set to None, all Embeds are cleared from an edited
+                message.
 
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if isinstance(self.embeds, list):
+        if embed is None:
+            self.embeds = []
+        elif isinstance(self.embeds, list):
             if isinstance(embed, Embed):
                 self.embeds.remove(embed)
             elif isinstance(embed, int):
@@ -538,7 +630,7 @@ class Webhook(Struct, kw_only=True):
         return self
 
     def set_allowed_mentions(
-        self: Self, allowed_mentions: UnsetType | AllowedMentions
+        self: Self, allowed_mentions: UnsetType | None | AllowedMentions
     ) -> "Webhook":
         """
         Set the allowed mentions for the Webhook instance.
@@ -567,13 +659,11 @@ class Webhook(Struct, kw_only=True):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if isinstance(self.components, UnsetType):
+        if not isinstance(self.components, list):
             self.components = []
 
         if not self.get_flag(MessageFlags.IS_COMPONENTS_V2):
             self.set_flag(MessageFlags.IS_COMPONENTS_V2, True)
-
-        self._set_with_components(True)
 
         if isinstance(component, TopLevelComponent):
             self.components.append(component)
@@ -583,19 +673,22 @@ class Webhook(Struct, kw_only=True):
         return self
 
     def remove_component(
-        self: Self, component: TopLevelComponent | list[TopLevelComponent] | int
+        self: Self, component: TopLevelComponent | list[TopLevelComponent] | int | None
     ) -> "Webhook":
         """
         Remove a Component from the Webhook instance.
 
         Arguments:
-            component (TopLevelComponent | list[TopLevelComponent] | int): A Component,
-                list of Components, or an index to remove.
+            component (TopLevelComponent | list[TopLevelComponent] | int | None): A
+                Component, list of Components, or an index to remove. If set to None,
+                all Components are cleared from an edited message.
 
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if isinstance(self.components, list):
+        if component is None:
+            self.components = []
+        elif isinstance(self.components, list):
             if isinstance(component, TopLevelComponent):
                 self.components.remove(component)
             elif isinstance(component, int):
@@ -612,7 +705,12 @@ class Webhook(Struct, kw_only=True):
         return self
 
     def add_attachment(
-        self: Self, filename: str, content: bytes | Path, spoiler: bool = False
+        self: Self,
+        filename: str,
+        content: bytes | Path,
+        *,
+        spoiler: bool = False,
+        description: UnsetType | str = UNSET,
     ) -> "Webhook":
         """
         Add a file Attachment to the Webhook instance.
@@ -625,6 +723,8 @@ class Webhook(Struct, kw_only=True):
 
             spoiler (bool): True if the file should be a spoiler (blurred).
 
+            description (str): Description or alt text for the file.
+
         Returns:
             self (Webhook): The modified Webhook instance.
         """
@@ -634,10 +734,72 @@ class Webhook(Struct, kw_only=True):
 
         attachment: Attachment = Attachment(filename=filename, content=content)
 
+        if isinstance(description, str):
+            attachment.set_description(description)
+
         if spoiler:
             attachment.set_spoiler(True)
 
         self._attachments.append(attachment)
+
+        return self
+
+    def retain_attachment(
+        self: Self,
+        attachment_id: str,
+        *,
+        description: UnsetType | str = UNSET,
+        spoiler: UnsetType | bool = UNSET,
+    ) -> "Webhook":
+        """
+        Retain an existing Attachment when editing a message.
+
+        Discord treats an edit request's Attachment list as the complete set to keep.
+        Call this method for every existing Attachment that should remain.
+
+        Arguments:
+            attachment_id (str): ID of an existing Attachment.
+
+            description (str): Updated description or alt text.
+
+            spoiler (bool): Updated spoiler state.
+
+        Returns:
+            self (Webhook): The modified Webhook instance.
+        """
+        if not attachment_id:
+            raise ValueError("attachment_id must not be empty")
+        elif (
+            isinstance(description, str)
+            and len(description) > ATTACHMENT_DESCRIPTION_MAX_LENGTH
+        ):
+            raise ValueError("Attachment description must be 1024 or fewer characters")
+
+        if not isinstance(self._attachment_manifest, list):
+            self._attachment_manifest = []
+
+        self._attachment_manifest = [
+            attachment
+            for attachment in self._attachment_manifest
+            if attachment.id != attachment_id
+        ]
+        self._attachment_manifest.append(
+            _AttachmentRequest(
+                id=attachment_id, description=description, is_spoiler=spoiler
+            )
+        )
+
+        return self
+
+    def clear_attachments(self: Self) -> "Webhook":
+        """
+        Remove pending and existing Attachments when editing a message.
+
+        Returns:
+            self (Webhook): The modified Webhook instance.
+        """
+        self._attachments = []
+        self._attachment_manifest = []
 
         return self
 
@@ -684,7 +846,7 @@ class Webhook(Struct, kw_only=True):
         Returns:
             self (Webhook): The modified Webhook instance.
         """
-        if isinstance(self.flags, UnsetType):
+        if not isinstance(self.flags, int):
             self.flags = 0
 
         if value:
@@ -733,7 +895,8 @@ class Webhook(Struct, kw_only=True):
         Set a Poll for the Webhook instance.
 
         Arguments:
-            poll (Poll): A Discord Poll object.
+            poll (Poll): A Discord Poll object. Editing a message can only add a Poll
+                to a deferred interaction response.
 
         Returns:
             self (Webhook): The modified Webhook instance.
@@ -756,8 +919,7 @@ class Webhook(Struct, kw_only=True):
         key: str = "wait"
 
         if wait is None:
-            if self._query_params.get(key):
-                self._query_params.pop(key)
+            self._remove_query_param(key)
         else:
             self._query_params[key] = str(wait)
 
@@ -777,35 +939,13 @@ class Webhook(Struct, kw_only=True):
         key: str = "thread_id"
 
         if thread_id is None:
-            if self._query_params.get(key):
-                self._query_params.pop(key)
+            self._remove_query_param(key)
         else:
             self._query_params[key] = thread_id
 
         return self
 
-    def _set_with_components(self: Self, with_components: bool | None) -> "Webhook":
-        """
-        Set whether the Webhook instance uses the with_components query parameter.
-
-        Arguments:
-            with_components (bool | None): Toggle with_components query parameter. If set
-                to None, the with_components parameter is removed.
-
-        Returns:
-            self (Webhook): The modified Webhook instance.
-        """
-        key: str = "with_components"
-
-        if with_components is None:
-            if self._query_params.get(key):
-                self._query_params.pop(key)
-        else:
-            self._query_params[key] = str(with_components)
-
-        return self
-
-    def _validate(self: Self) -> None:
+    def _validate(self: Self, edit: bool = False) -> None:
         """Convert applicable data types prior to Webhook serialization."""
         if isinstance(self.embeds, list):
             for embed in self.embeds:
@@ -823,28 +963,221 @@ class Webhook(Struct, kw_only=True):
                             component.accent_color
                         )
 
-    def _build_request(self: Self) -> dict[str, Any]:
-        """Return a Request object for the Webhook instance."""
-        if len(self._attachments) > 0:
-            files: dict[str, Tuple[str | Literal[None], str | bytes]] = {
-                "payload_json": (None, msgspec.json.encode(self))
+        self._validate_components(edit)
+
+    def _validate_components(self: Self, edit: bool) -> None:
+        """Validate fields that cannot accompany Components."""
+        if not (
+            isinstance(self.flags, int) and self.flags & MessageFlags.IS_COMPONENTS_V2
+        ):
+            return
+
+        if edit and self.embeds is None:
+            self.embeds = []
+
+        incompatible_fields: dict[str, Any] = {
+            "content": self.content,
+            "embeds": self.embeds,
+            "poll": self.poll,
+        }
+        incompatible_fields = {
+            name: value
+            for name, value in incompatible_fields.items()
+            if not isinstance(value, UnsetType)
+            and value is not None
+            and not (name == "embeds" and value == [])
+        }
+
+        if incompatible_fields:
+            fields: str = ", ".join(incompatible_fields)
+            raise ValueError(f"COMPONENTS cannot be combined with non-null {fields}")
+
+    def _validate_edit(self: Self, message_id: str) -> None:
+        """Validate fields specific to editing a Webhook message."""
+        if not message_id:
+            raise ValueError("message_id must not be empty")
+
+        allowed_flags: int = (
+            MessageFlags.SUPPRESS_EMBEDS | MessageFlags.IS_COMPONENTS_V2
+        )
+        if isinstance(self.flags, int) and self.flags & ~allowed_flags:
+            raise ValueError(
+                "Webhook message edits only support SUPPRESS_EMBEDS and IS_COMPONENTS_V2 flags"
+            )
+
+        if self._attachments and not isinstance(self._attachment_manifest, list):
+            raise ValueError(
+                "Call retain_attachment() or clear_attachments() before uploading files in a message edit"
+            )
+
+    def _base_url(self: Self) -> str:
+        """Return the Webhook URL without query parameters or fragments."""
+        parsed = urlsplit(self.url)
+        return urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
+        )
+
+    def _remove_query_param(self: Self, key: str) -> None:
+        """Remove a query parameter from stored and URL-provided state."""
+        self._query_params.pop(key, None)
+        parsed = urlsplit(self.url)
+        query = urlencode(
+            [(name, value) for name, value in parse_qsl(parsed.query) if name != key]
+        )
+        self.url = urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment)
+        )
+
+    def _message_url(self: Self, message_id: str) -> str:
+        """Return the endpoint URL for a Webhook message."""
+        return f"{self._base_url()}/messages/{message_id}"
+
+    def _valid_attachments(self: Self) -> list[Attachment]:
+        """Return local Attachments that contain a filename and content."""
+        return [
+            attachment
+            for attachment in self._attachments
+            if isinstance(attachment.filename, str)
+            and isinstance(attachment.content, bytes)
+        ]
+
+    def _attachment_request(
+        self: Self, attachment_id: int, attachment: Attachment
+    ) -> _AttachmentRequest:
+        """Build request metadata for a local Attachment."""
+        return _AttachmentRequest(
+            id=attachment_id,
+            filename=attachment.filename,
+            description=attachment.description,
+            is_spoiler=attachment.spoiler,
+        )
+
+    def _build_payload(
+        self: Self, payload_fields: tuple[str, ...], edit: bool
+    ) -> dict[str, Any]:
+        """Build an endpoint-specific Webhook payload."""
+        payload: dict[str, Any] = {}
+        for field in payload_fields:
+            value: Any = getattr(self, field)
+            if isinstance(value, UnsetType) or (
+                not edit and (value is None or value == [])
+            ):
+                continue
+
+            payload[field] = value
+        attachments: list[Attachment] = self._valid_attachments()
+        attachment_requests: list[_AttachmentRequest] = [
+            self._attachment_request(index, attachment)
+            for index, attachment in enumerate(attachments)
+        ]
+
+        if edit and (
+            isinstance(self._attachment_manifest, list) or attachment_requests
+        ):
+            retained_attachments: list[_AttachmentRequest] = (
+                self._attachment_manifest
+                if isinstance(self._attachment_manifest, list)
+                else []
+            )
+            payload["attachments"] = [*retained_attachments, *attachment_requests]
+        elif not edit and attachment_requests:
+            payload["attachments"] = attachment_requests
+
+        return payload
+
+    @staticmethod
+    def _strip_internal_fields(value: Any) -> Any:
+        """Remove msgspec discriminator fields from an outgoing payload."""
+        if isinstance(value, dict):
+            return {
+                key: Webhook._strip_internal_fields(entry)
+                for key, entry in value.items()
+                if key != "_type"
             }
+        elif isinstance(value, list):
+            return [Webhook._strip_internal_fields(entry) for entry in value]
 
-            for attachment in self._attachments:
-                if isinstance(attachment.filename, UnsetType):
-                    continue
-                elif isinstance(attachment.content, UnsetType):
-                    continue
+        return value
 
-                files[attachment.filename] = (attachment.filename, attachment.content)
+    def _build_request(
+        self: Self,
+        payload_fields: tuple[str, ...],
+        query_fields: tuple[str, ...],
+        edit: bool = False,
+    ) -> dict[str, Any]:
+        """Return request arguments for a Webhook operation."""
+        payload: dict[str, Any] = self._build_payload(payload_fields, edit)
+        payload_data: Any = msgspec.to_builtins(payload)
+        payload_data = self._strip_internal_fields(payload_data)
+        payload_json: bytes = msgspec.json.encode(payload_data)
+        params: dict[str, str] = {
+            key: value
+            for key, value in parse_qsl(
+                urlsplit(self.url).query, keep_blank_values=True
+            )
+            if key in query_fields
+        }
+        params.update(
+            {
+                key: value
+                for key, value in self._query_params.items()
+                if key in query_fields
+            }
+        )
+        if "components" in payload and "with_components" in query_fields:
+            params["with_components"] = "True"
+        attachments: list[Attachment] = self._valid_attachments()
 
-            return {"files": files}
+        if attachments:
+            files: dict[str, Any] = {"payload_json": (None, payload_json)}
+
+            for index, attachment in enumerate(attachments):
+                if isinstance(attachment.filename, str) and isinstance(
+                    attachment.content, bytes
+                ):
+                    files[f"files[{index}]"] = (attachment.filename, attachment.content)
+
+            return {"files": files, "params": params}
 
         return {
-            "data": msgspec.json.encode(self),
-            "params": self._query_params,
+            "data": payload_json,
+            "params": params,
             "headers": {"Content-Type": "application/json"},
         }
+
+    def _send_request(
+        self: Self, method: str, url: str, request: dict[str, Any]
+    ) -> Response:
+        """Send a synchronous Webhook request with rate-limit retries."""
+        with Session() as session:
+            response: Response = session.request(method, url, **request)
+
+            logging.debug(f"{response.request=}")
+            logging.debug(f"{response.status_code=} {response.text=}")
+
+            while response.status_code == 429:
+                sleep(self._ratelimit_retry(response))
+
+                response = session.request(method, url, **request)
+
+            return response.raise_for_status()
+
+    async def _send_request_async(
+        self: Self, method: str, url: str, request: dict[str, Any]
+    ) -> Response:
+        """Send an asynchronous Webhook request with rate-limit retries."""
+        async with AsyncSession() as session:
+            response: Response = await session.request(method, url, **request)
+
+            logging.debug(f"{response.request=}")
+            logging.debug(f"{response.status_code=} {response.text=}")
+
+            while response.status_code == 429:
+                await async_sleep(self._ratelimit_retry(response))
+
+                response = await session.request(method, url, **request)
+
+            return response.raise_for_status()
 
     def _ratelimit_retry(self: Self, res: Response) -> float:
         """Return the amount of time to wait after encountering a ratelimit."""

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from msgspec import Meta, Struct, inspect
-from msgspec.inspect import Field, StrType, StructType, Type, type_info
+from msgspec.inspect import Field, StrType, StructType, Type, UnionType, type_info
 
 
 class Validation:
@@ -93,7 +93,11 @@ class Validation:
 
             field_info: Type = field.type
 
-            if not isinstance(field_info, StrType):
-                continue
+            if isinstance(field_info, StrType):
+                return field_info.max_length
+            elif isinstance(field_info, UnionType):
+                for member in field_info.types:
+                    if isinstance(member, StrType):
+                        return member.max_length
 
-            return getattr(field_info, "max_length")
+            return

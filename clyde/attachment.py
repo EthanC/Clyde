@@ -1,10 +1,12 @@
 """Define the Attachment class and its associates."""
 
 from pathlib import Path
-from typing import Final, Self
+from typing import Annotated, Final, Self
 
 import msgspec
-from msgspec import UNSET, Struct, UnsetType
+from msgspec import UNSET, Meta, Struct, UnsetType
+
+from clyde.constants import ATTACHMENT_DESCRIPTION_MAX_LENGTH
 
 SPOILER_PREFIX: Final[str] = "SPOILER_"
 
@@ -20,7 +22,9 @@ class Attachment(Struct, kw_only=True):
 
         content (bytes): Binary content of the file attached.
 
-        spoiler (bool | None): Whether the Container should be a spoiler (blurred).
+        description (str): Description (alt text) for the file.
+
+        spoiler (bool | None): Whether the file should be a spoiler (blurred).
     """
 
     filename: UnsetType | str = msgspec.field(default=UNSET)
@@ -28,6 +32,11 @@ class Attachment(Struct, kw_only=True):
 
     content: UnsetType | bytes = msgspec.field(default=UNSET)
     """Binary content of the file attached."""
+
+    description: (
+        UnsetType | Annotated[str, Meta(max_length=ATTACHMENT_DESCRIPTION_MAX_LENGTH)]
+    ) = msgspec.field(default=UNSET)
+    """Description (alt text) for the file."""
 
     spoiler: UnsetType | bool = msgspec.field(default=UNSET)
     """Whether the file should be a spoiler (blurred)."""
@@ -62,6 +71,25 @@ class Attachment(Struct, kw_only=True):
                 content = handle.read()
 
         self.content = content
+
+        return self
+
+    def set_description(self: Self, description: str) -> "Attachment":
+        """
+        Set the description (alt text) of the file Attachment.
+
+        Arguments:
+            description (str): Description (alt text) for the file.
+
+        Returns:
+            self (Attachment): The modified Attachment instance.
+        """
+        if len(description) > ATTACHMENT_DESCRIPTION_MAX_LENGTH:
+            raise ValueError(
+                f"Attachment description must be {ATTACHMENT_DESCRIPTION_MAX_LENGTH:,} or fewer characters"
+            )
+
+        self.description = description
 
         return self
 
