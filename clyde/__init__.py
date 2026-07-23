@@ -17,6 +17,7 @@ from clyde.embed import (
     EmbedThumbnail,
 )
 from clyde.markdown import Markdown
+from clyde.message import Message
 from clyde.poll import Poll, PollAnswer, PollMediaAnswer, PollMediaQuestion
 from clyde.timestamp import Timestamp, TimestampStyles
 from clyde.webhook import (
@@ -38,6 +39,7 @@ __all__: list[str] = [
     "EmbedImage",
     "EmbedThumbnail",
     "Markdown",
+    "Message",
     "Poll",
     "PollAnswer",
     "PollMediaAnswer",

@@ -24,6 +24,7 @@ from clyde.components.seperator import Seperator
 from clyde.components.text_display import TextDisplay
 from clyde.constants import ATTACHMENT_DESCRIPTION_MAX_LENGTH
 from clyde.embed import Embed
+from clyde.message import Message
 from clyde.poll import Poll
 from clyde.validation import Validation
 
@@ -56,6 +57,7 @@ _EDIT_PAYLOAD_FIELDS: tuple[str, ...] = (
 )
 _EXECUTE_QUERY_FIELDS: tuple[str, ...] = ("wait", "thread_id", "with_components")
 _EDIT_QUERY_FIELDS: tuple[str, ...] = ("thread_id", "with_components")
+_MESSAGE_QUERY_FIELDS: tuple[str, ...] = ("thread_id",)
 _AVATAR_MEDIA_TYPES: tuple[tuple[bytes, str], ...] = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
     (b"\xff\xd8\xff", "image/jpeg"),
@@ -618,6 +620,50 @@ class Webhook(Struct, kw_only=True):
             "DELETE", self._base_url(), self._audit_log_request(reason)
         )
 
+    def get_message(self: Self, message_id: str) -> Message:
+        """
+        Get a message previously sent by this Webhook.
+
+        https://discord.com/developers/docs/resources/webhook#get-webhook-message
+
+        Arguments:
+            message_id (str): ID of the message to retrieve.
+
+        Returns:
+            message (Message): Message populated with Discord's response data.
+        """
+        self._validate_message_id(message_id)
+
+        res: Response = self._send_request(
+            "GET",
+            self._message_url(message_id),
+            {"params": self._build_query_params(_MESSAGE_QUERY_FIELDS)},
+        )
+
+        return self._decode_message(res)
+
+    async def get_message_async(self: Self, message_id: str) -> Message:
+        """
+        Asynchronously get a message previously sent by this Webhook.
+
+        https://discord.com/developers/docs/resources/webhook#get-webhook-message
+
+        Arguments:
+            message_id (str): ID of the message to retrieve.
+
+        Returns:
+            message (Message): Message populated with Discord's response data.
+        """
+        self._validate_message_id(message_id)
+
+        res: Response = await self._send_request_async(
+            "GET",
+            self._message_url(message_id),
+            {"params": self._build_query_params(_MESSAGE_QUERY_FIELDS)},
+        )
+
+        return self._decode_message(res)
+
     def edit_message(self: Self, message_id: str) -> Response:
         """
         Edit a message previously sent by this Webhook.
@@ -1160,8 +1206,7 @@ class Webhook(Struct, kw_only=True):
 
     def _validate_edit(self: Self, message_id: str) -> None:
         """Validate fields specific to editing a Webhook message."""
-        if not message_id:
-            raise ValueError("message_id must not be empty")
+        self._validate_message_id(message_id)
 
         allowed_flags: int = (
             MessageFlags.SUPPRESS_EMBEDS | MessageFlags.IS_COMPONENTS_V2
@@ -1176,6 +1221,12 @@ class Webhook(Struct, kw_only=True):
                 "Call retain_attachment() or clear_attachments() before uploading files in a message edit"
             )
 
+    @staticmethod
+    def _validate_message_id(message_id: str) -> None:
+        """Validate a Webhook message ID."""
+        if not message_id:
+            raise ValueError("message_id must not be empty")
+
     def _decode_webhook(self: Self, res: Response) -> "Webhook":
         """Decode a Webhook response and retain its executable URL."""
         data: dict[str, Any] = msgspec.json.decode(
@@ -1184,6 +1235,11 @@ class Webhook(Struct, kw_only=True):
         data.setdefault("url", self._base_url())
 
         return msgspec.convert(data, type=Webhook)
+
+    @staticmethod
+    def _decode_message(res: Response) -> Message:
+        """Decode a Message response."""
+        return msgspec.json.decode(res.content or b"", type=Message)
 
     def _base_url(self: Self) -> str:
         """Return the Webhook URL without query parameters or fragments."""
@@ -1333,20 +1389,7 @@ class Webhook(Struct, kw_only=True):
         payload_data: Any = msgspec.to_builtins(payload)
         payload_data = self._strip_internal_fields(payload_data)
         payload_json: bytes = msgspec.json.encode(payload_data)
-        params: dict[str, str] = {
-            key: value
-            for key, value in parse_qsl(
-                urlsplit(self.url).query, keep_blank_values=True
-            )
-            if key in query_fields
-        }
-        params.update(
-            {
-                key: value
-                for key, value in self._query_params.items()
-                if key in query_fields
-            }
-        )
+        params: dict[str, str] = self._build_query_params(query_fields)
         if "components" in payload and "with_components" in query_fields:
             params["with_components"] = "True"
         attachments: list[Attachment] = self._valid_attachments()
@@ -1364,6 +1407,28 @@ class Webhook(Struct, kw_only=True):
             "params": params,
             "headers": {"Content-Type": "application/json"},
         }
+
+    def _build_query_params(
+        self: Self, query_fields: tuple[str, ...]
+    ) -> dict[str, str]:
+        """Return endpoint-specific query parameters."""
+        params: dict[str, str] = {
+            key: value
+            for key, value in parse_qsl(
+                urlsplit(self.url).query, keep_blank_values=True
+            )
+            if key in query_fields
+        }
+
+        params.update(
+            {
+                key: value
+                for key, value in self._query_params.items()
+                if key in query_fields
+            }
+        )
+
+        return params
 
     def _send_request(
         self: Self, method: str, url: str, request: dict[str, Any]

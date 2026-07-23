@@ -16,6 +16,7 @@ from clyde import (
     Attachment,
     Embed,
     Markdown,
+    Message,
     Poll,
     PollAnswer,
     PollMediaAnswer,
@@ -163,6 +164,25 @@ def test_webhook_delete() -> None:
         webhook.delete(reason="")
     with pytest.raises(ValueError, match="between 1 and 512"):
         run(webhook.delete_async(reason="x" * 513))
+
+
+def test_webhook_get_message() -> None:
+    """Validate synchronous and asynchronous message retrieval against Discord."""
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT).set_wait(True)
+    created: Response = webhook.execute()
+    message_id: str = created.json()["id"]
+    getter: Webhook = Webhook(url=f"{STRING_URL_WEBHOOK}/?wait=True#fragment")
+
+    message: Message = getter.get_message(message_id)
+
+    assert isinstance(message, Message)
+    assert message.id == message_id
+    assert message.content == STRING_SHORT
+    assert isinstance(message.webhook_id, str)
+
+    async_message: Message = run(getter.get_message_async(message_id))
+
+    assert async_message == message
 
 
 def test_webhook_edit_message() -> None:
