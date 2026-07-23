@@ -73,6 +73,52 @@ def test_webhook_execute() -> None:
     assert isinstance(res, Response) and res.ok
 
 
+def test_webhook_modify() -> None:
+    """Validate token-authenticated Webhook modifications against Discord."""
+    webhook = Webhook(url=f"{STRING_URL_WEBHOOK}/?wait=True#fragment")
+    avatar_path = Path("tests/clyde/data/image_1.png")
+
+    modified: Response = webhook.modify(
+        name=STRING_EXTRA_SHORT, avatar=avatar_path, reason="Test webhook modification"
+    )
+    modified_data: dict = modified.json()
+
+    assert isinstance(modified, Response) and modified.ok
+    assert modified_data["name"] == STRING_EXTRA_SHORT
+    assert modified_data["avatar"] is not None
+    assert "user" not in modified_data
+
+    modified_bytes: Response = run(
+        webhook.modify_async(
+            avatar=Path("tests/clyde/data/image_2.png").read_bytes(),
+            reason="Test bytes avatar modification",
+        )
+    )
+    modified_bytes_data: dict = modified_bytes.json()
+
+    assert isinstance(modified_bytes, Response) and modified_bytes.ok
+    assert modified_bytes_data["name"] == STRING_EXTRA_SHORT
+    assert modified_bytes_data["avatar"] is not None
+    assert modified_bytes_data["avatar"] != modified_data["avatar"]
+    assert "user" not in modified_bytes_data
+
+    cleared: Response = webhook.modify(avatar=None, reason="Clear test webhook avatar")
+    cleared_data: dict = cleared.json()
+
+    assert isinstance(cleared, Response) and cleared.ok
+    assert cleared_data["name"] == STRING_EXTRA_SHORT
+    assert cleared_data["avatar"] is None
+    assert "user" not in cleared_data
+
+    unchanged: Response = webhook.modify()
+
+    assert isinstance(unchanged, Response) and unchanged.ok
+    assert unchanged.json()["name"] == STRING_EXTRA_SHORT
+
+    with pytest.raises(ValueError, match="PNG, JPEG, or GIF"):
+        webhook.modify(avatar=b"not an image")
+
+
 def test_webhook_delete() -> None:
     """Validate synchronous and asynchronous Webhook deletion requests."""
     webhook = Webhook(

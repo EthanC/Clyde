@@ -2,6 +2,7 @@
 
 import logging
 from asyncio import sleep as async_sleep
+from base64 import b64encode
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from time import sleep
@@ -30,6 +31,7 @@ TopLevelComponent: TypeAlias = (
     ActionRow | Container | File | MediaGallery | Section | Seperator | TextDisplay
 )
 TopLevelComponents: TypeAlias = list[TopLevelComponent]
+_Avatar: TypeAlias = UnsetType | None | str | bytes | Path
 
 _EXECUTE_PAYLOAD_FIELDS: tuple[str, ...] = (
     "content",
@@ -54,6 +56,12 @@ _EDIT_PAYLOAD_FIELDS: tuple[str, ...] = (
 )
 _EXECUTE_QUERY_FIELDS: tuple[str, ...] = ("wait", "thread_id", "with_components")
 _EDIT_QUERY_FIELDS: tuple[str, ...] = ("thread_id", "with_components")
+_AVATAR_MEDIA_TYPES: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
 
 
 class _AttachmentRequest(Struct, kw_only=True):
@@ -451,6 +459,66 @@ class Webhook(Struct, kw_only=True):
         )
 
         return await self._send_request_async("POST", self._base_url(), req)
+
+    def modify(
+        self: Self,
+        *,
+        name: UnsetType | str = UNSET,
+        avatar: _Avatar = UNSET,
+        reason: str | None = None,
+    ) -> Response:
+        """
+        Modify the current Webhook using its token.
+
+        Fields left as ``UNSET`` remain unchanged. Set ``avatar`` to ``None`` to
+        clear the default avatar; otherwise, provide Discord-compatible image data.
+
+        https://docs.discord.com/developers/resources/webhook#modify-webhook-with-token
+
+        Arguments:
+            name (str): New default name for the Webhook.
+
+            avatar (str | bytes | Path | None): New default avatar as an image data URI,
+                image bytes, or image file path. Set to ``None`` to clear it.
+
+            reason (str | None): Optional audit log reason (1-512 characters).
+
+        Returns:
+            res (Response): Response object containing the modified Webhook.
+        """
+        req: dict[str, Any] = self._modify_request(name, avatar, reason)
+
+        return self._send_request("PATCH", self._base_url(), req)
+
+    async def modify_async(
+        self: Self,
+        *,
+        name: UnsetType | str = UNSET,
+        avatar: _Avatar = UNSET,
+        reason: str | None = None,
+    ) -> Response:
+        """
+        Asynchronously modify the current Webhook using its token.
+
+        Fields left as ``UNSET`` remain unchanged. Set ``avatar`` to ``None`` to
+        clear the default avatar; otherwise, provide Discord-compatible image data.
+
+        https://docs.discord.com/developers/resources/webhook#modify-webhook-with-token
+
+        Arguments:
+            name (str): New default name for the Webhook.
+
+            avatar (str | bytes | Path | None): New default avatar as an image data URI,
+                image bytes, or image file path. Set to ``None`` to clear it.
+
+            reason (str | None): Optional audit log reason (1-512 characters).
+
+        Returns:
+            res (Response): Response object containing the modified Webhook.
+        """
+        req: dict[str, Any] = self._modify_request(name, avatar, reason)
+
+        return await self._send_request_async("PATCH", self._base_url(), req)
 
     def delete(self: Self, reason: str | None = None) -> Response:
         """
@@ -1048,6 +1116,44 @@ class Webhook(Struct, kw_only=True):
         return urlunsplit(
             (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
         )
+
+    @staticmethod
+    def _modify_request(
+        name: UnsetType | str, avatar: _Avatar, reason: str | None
+    ) -> dict[str, Any]:
+        """Return request arguments for modifying a Webhook with its token."""
+        if isinstance(avatar, (bytes, Path)):
+            avatar = Webhook._avatar_data(avatar)
+
+        payload: dict[str, Any] = {
+            key: value
+            for key, value in {"name": name, "avatar": avatar}.items()
+            if not isinstance(value, UnsetType)
+        }
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+
+        headers.update(Webhook._audit_log_request(reason).get("headers", {}))
+
+        return {"data": msgspec.json.encode(payload), "headers": headers}
+
+    @staticmethod
+    def _avatar_data(avatar: bytes | Path) -> str:
+        """Convert supported image bytes to Discord image data."""
+        data: bytes = avatar.read_bytes() if isinstance(avatar, Path) else avatar
+        media_type: str | None = next(
+            (
+                media_type
+                for signature, media_type in _AVATAR_MEDIA_TYPES
+                if data.startswith(signature)
+            ),
+            None,
+        )
+        if media_type is None:
+            raise ValueError(
+                "Webhook avatars must contain PNG, JPEG, or GIF image data"
+            )
+
+        return f"data:{media_type};base64,{b64encode(data).decode('ascii')}"
 
     @staticmethod
     def _audit_log_request(reason: str | None) -> dict[str, Any]:
