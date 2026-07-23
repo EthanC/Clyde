@@ -6,8 +6,9 @@ from pathlib import Path
 from time import sleep
 from unittest.mock import AsyncMock, patch
 
+import msgspec
 import pytest
-from niquests import Response
+from niquests import HTTPError, PreparedRequest, Response
 
 from clyde import (
     UNSET,
@@ -56,12 +57,332 @@ def delay() -> None:
     sleep(FLOAT_TEST_DELAY)
 
 
+def _discord_response(body: object | bytes, status_code: int = 400) -> Response:
+    """Build a Discord response without making a network request."""
+    response = Response()
+    response.status_code = status_code
+    response.reason = "Bad Request" if status_code >= 400 else "OK"
+    response.url = "https://discord.com/api/webhooks/1/token"
+    response.encoding = "utf-8"
+    response._content = body if isinstance(body, bytes) else msgspec.json.encode(body)
+
+    return response
+
+
 def test_webhook() -> None:
     """
     A test case to validate the creation of an empty Webhook instance.
     """
 
     assert Webhook(url=STRING_URL_WEBHOOK)
+
+
+def test_webhook_http_error_includes_nested_discord_errors() -> None:
+    """Resolve nested Discord error fields to readable payload paths."""
+    response = _discord_response(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "_errors": [
+                    {
+                        "code": "APPLICATION_COMMAND_TOO_LARGE",
+                        "message": "Command exceeds maximum size (8000)",
+                    },
+                    {"message": "Request-level problem"},
+                ],
+                "embeds": {
+                    "0": {
+                        "fields": {
+                            "6": {
+                                "value": {
+                                    "_errors": [
+                                        {
+                                            "code": "BASE_TYPE_MAX_LENGTH",
+                                            "message": "Must be 1024 or fewer in length.",
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "components": {
+                    "1": {
+                        "components": {
+                            "0": {
+                                "_errors": [
+                                    {
+                                        "code": "UNION_TYPE_CHOICES",
+                                        "message": 'Value of field "type" must be one of (1,).',
+                                    },
+                                    {"message": "Component-level problem"},
+                                ]
+                            }
+                        }
+                    }
+                },
+                "0": {"_errors": [{"message": "Root array item problem"}]},
+                "ignored": 7,
+            },
+        }
+    )
+    request = PreparedRequest()
+    response.request = request
+
+    with pytest.raises(HTTPError) as caught:
+        Webhook._raise_for_status(response)
+
+    error = str(caught.value)
+    assert "Discord API error 50035: Invalid Form Body" in error
+    assert (
+        "[APPLICATION_COMMAND_TOO_LARGE]: Command exceeds maximum size (8000)" in error
+    )
+    assert "Request-level problem" in error
+    assert (
+        "embeds[0].fields[6].value[BASE_TYPE_MAX_LENGTH]: Must be 1024 or fewer in length."
+        in error
+    )
+    assert (
+        'components[1].components[0][UNION_TYPE_CHOICES]: Value of field "type" must be one of (1,).'
+        in error
+    )
+    assert "components[1].components[0]: Component-level problem" in error
+    assert "[0]: Root array item problem" in error
+    assert caught.value.response is response
+    assert caught.value.request is request
+
+
+def test_webhook_http_error_includes_legacy_field_errors() -> None:
+    """Resolve Discord's field-to-message-list error response format."""
+    response = _discord_response(
+        {"thread_id": ['Value "not-a-snowflake" is not snowflake.'], "empty": []}
+    )
+
+    with pytest.raises(HTTPError, match="thread_id") as caught:
+        Webhook._raise_for_status(response)
+
+    assert 'thread_id: Value "not-a-snowflake" is not snowflake.' in str(caught.value)
+
+
+def test_webhook_http_error_includes_message_without_code() -> None:
+    """Include a Discord error message when no numeric API code is present."""
+    response = _discord_response({"message": "Unknown Error"})
+
+    with pytest.raises(HTTPError, match="Discord API error: Unknown Error"):
+        Webhook._raise_for_status(response)
+
+
+def test_webhook_http_error_logs_json_payload_piece(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Log only the JSON payload value referenced by Discord's error path."""
+    response = _discord_response(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "_errors": [
+                    {"code": "REQUEST_ERROR", "message": "Request-level problem"}
+                ],
+                "embeds": {
+                    "0": {
+                        "fields": {
+                            "0": {
+                                "value": {
+                                    "_errors": [
+                                        {
+                                            "code": "BASE_TYPE_MAX_LENGTH",
+                                            "message": "Must be 1024 or fewer in length.",
+                                        },
+                                        {
+                                            "code": "SECOND_ERROR",
+                                            "message": "Another problem with this value.",
+                                        },
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+            },
+        }
+    )
+    request = {
+        "data": msgspec.json.encode(
+            {"embeds": [{"fields": [{"value": "problematic value"}]}]}
+        )
+    }
+    caplog.set_level(logging.DEBUG)
+
+    with pytest.raises(HTTPError):
+        Webhook._raise_for_status(response, request)
+
+    records = [
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("Discord request payload")
+    ]
+    assert len(records) == 1
+    assert records[0].levelno == logging.DEBUG
+    assert records[0].getMessage() == (
+        "Discord request payload at embeds[0].fields[0].value: 'problematic value'"
+    )
+
+
+def test_webhook_http_error_logs_multipart_payload_piece(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Resolve a referenced Component from multipart payload_json."""
+    response = _discord_response(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "components": {
+                    "0": {
+                        "components": {
+                            "0": {
+                                "_errors": [
+                                    {
+                                        "code": "UNION_TYPE_CHOICES",
+                                        "message": "Invalid Component type.",
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    )
+    payload = {"components": [{"components": [{"type": 10, "content": "Bad"}]}]}
+    request = {
+        "files": {
+            "payload_json": (None, msgspec.json.encode(payload)),
+            "files[0]": ("test.txt", b"test"),
+        }
+    }
+    caplog.set_level(logging.DEBUG)
+
+    with pytest.raises(HTTPError):
+        Webhook._raise_for_status(response, request)
+
+    assert any(
+        record.levelno == logging.DEBUG
+        and record.getMessage()
+        == "Discord request payload at components[0].components[0]: {'type': 10, 'content': 'Bad'}"
+        for record in caplog.records
+    )
+
+
+def test_webhook_http_error_logs_missing_payload_piece(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Mark referenced payload paths that cannot be resolved."""
+    response = _discord_response(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "embeds": {
+                    "0": {
+                        "fields": {
+                            "0": {
+                                "value": {
+                                    "_errors": [
+                                        {
+                                            "code": "BASE_TYPE_REQUIRED",
+                                            "message": "This field is required",
+                                        }
+                                    ]
+                                }
+                            },
+                            "1": {
+                                "value": {
+                                    "_errors": [
+                                        {
+                                            "code": "BASE_TYPE_REQUIRED",
+                                            "message": "This field is required",
+                                        }
+                                    ]
+                                }
+                            },
+                        }
+                    }
+                }
+            },
+        }
+    )
+    request = {
+        "data": msgspec.json.encode(
+            {"embeds": [{"fields": [{"name": "Missing value"}]}]}
+        )
+    }
+    caplog.set_level(logging.DEBUG)
+
+    with pytest.raises(HTTPError):
+        Webhook._raise_for_status(response, request)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert "Discord request payload at embeds[0].fields[0].value: <missing>" in messages
+    assert "Discord request payload at embeds[0].fields[1].value: <missing>" in messages
+
+
+def test_webhook_http_error_skips_unavailable_request_payloads(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Skip payload logging when the outgoing JSON is unavailable or invalid."""
+    response = _discord_response(
+        {
+            "message": "Invalid Form Body",
+            "code": 50035,
+            "errors": {
+                "content": {
+                    "_errors": [
+                        {
+                            "code": "BASE_TYPE_MAX_LENGTH",
+                            "message": "Must be 2000 or fewer in length.",
+                        }
+                    ]
+                }
+            },
+        }
+    )
+    caplog.set_level(logging.DEBUG)
+
+    for request in ({}, {"files": []}, {"files": {}}, {"data": b"not json"}):
+        caplog.clear()
+
+        with pytest.raises(HTTPError):
+            Webhook._raise_for_status(response, request)
+
+        assert not any(
+            record.getMessage().startswith("Discord request payload")
+            for record in caplog.records
+        )
+
+
+@pytest.mark.parametrize("body", [b"not json", [], {}])
+def test_webhook_http_error_ignores_unresolved_bodies(body: object | bytes) -> None:
+    """Retain the standard HTTP error when Discord provides no useful details."""
+    response = _discord_response(body)
+    expected = (
+        "400 Client Error: Bad Request for url: "
+        "https://discord.com/api/webhooks/1/token"
+    )
+
+    with pytest.raises(HTTPError, match="400 Client Error") as caught:
+        Webhook._raise_for_status(response)
+
+    assert str(caught.value) == expected
+
+
+def test_webhook_raise_for_status_returns_success() -> None:
+    """Return successful responses unchanged."""
+    response = _discord_response({}, status_code=200)
+
+    assert Webhook._raise_for_status(response) is response
 
 
 def test_webhook_execute() -> None:

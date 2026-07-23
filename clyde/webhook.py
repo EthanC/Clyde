@@ -1579,6 +1579,145 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
 
         return params
 
+    @staticmethod
+    def _raise_for_status(
+        response: Response, request: dict[str, Any] | None = None
+    ) -> Response:
+        """Raise an HTTP error enriched with details returned by Discord."""
+
+        def flatten_errors(
+            value: Any, path: str = "", payload_path: tuple[str, ...] = ()
+        ) -> list[tuple[str, tuple[str, ...], str]]:
+            if isinstance(value, dict):
+                message: Any = value.get("message")
+
+                if isinstance(message, str):
+                    code: Any = value.get("code")
+                    location: str = path
+
+                    if isinstance(code, (int, str)):
+                        location = f"{location}[{code}]" if location else f"[{code}]"
+
+                    detail: str = f"{location}: {message}" if location else message
+
+                    return [(path, payload_path, detail)]
+
+                details: list[tuple[str, tuple[str, ...], str]] = []
+
+                for key, entry in value.items():
+                    if key == "_errors":
+                        details.extend(flatten_errors(entry, path, payload_path))
+
+                        continue
+
+                    key = str(key)
+
+                    if key.isdecimal():
+                        next_path: str = f"{path}[{key}]" if path else f"[{key}]"
+                    else:
+                        next_path = f"{path}.{key}" if path else key
+
+                    details.extend(
+                        flatten_errors(entry, next_path, (*payload_path, key))
+                    )
+
+                return details
+
+            elif isinstance(value, list):
+                return [
+                    detail
+                    for entry in value
+                    for detail in flatten_errors(entry, path, payload_path)
+                ]
+            elif isinstance(value, str):
+                detail = f"{path}: {value}" if path else value
+
+                return [(path, payload_path, detail)]
+
+            return []
+
+        try:
+            return response.raise_for_status()
+        except niquests.HTTPError as error:
+            try:
+                response_data: Any = response.json()
+            except niquests.JSONDecodeError:
+                pass
+            else:
+                if isinstance(response_data, dict):
+                    message: Any = response_data.get("message")
+                    code: Any = response_data.get("code")
+                    error_data: Any = response_data.get("errors")
+
+                    if error_data is None:
+                        error_data = {
+                            key: value
+                            for key, value in response_data.items()
+                            if key not in ("message", "code")
+                        }
+
+                    details: list[str] = []
+
+                    if isinstance(message, str):
+                        code_text: str = (
+                            f" {code}" if isinstance(code, (int, str)) else ""
+                        )
+
+                        details.append(f"Discord API error{code_text}: {message}")
+
+                    flattened_errors = flatten_errors(error_data)
+                    details.extend(detail for _, _, detail in flattened_errors)
+
+                    if request is not None:
+                        payload_data: Any = request.get("data")
+
+                        if payload_data is None:
+                            files: Any = request.get("files")
+
+                            if isinstance(files, dict):
+                                payload_json: Any = files.get("payload_json")
+
+                                if isinstance(payload_json, tuple):
+                                    payload_data = payload_json[1]
+
+                        try:
+                            payload: Any = msgspec.json.decode(payload_data)
+                        except (msgspec.DecodeError, TypeError):
+                            pass
+                        else:
+                            logged_paths: set[tuple[str, ...]] = set()
+
+                            for path, payload_path, _ in flattened_errors:
+                                if not path or payload_path in logged_paths:
+                                    continue
+
+                                logged_paths.add(payload_path)
+                                payload_piece: Any = payload
+
+                                try:
+                                    for key in payload_path:
+                                        payload_piece = (
+                                            payload_piece[int(key)]
+                                            if isinstance(payload_piece, list)
+                                            else payload_piece[key]
+                                        )
+                                except (IndexError, KeyError, TypeError, ValueError):
+                                    logging.debug(
+                                        "Discord request payload at %s: <missing>", path
+                                    )
+                                else:
+                                    logging.debug(
+                                        "Discord request payload at %s: %r",
+                                        path,
+                                        payload_piece,
+                                    )
+
+                    if details:
+                        detail_text: str = "\n".join(details)
+                        error.args = (f"{error}\n{detail_text}",)
+
+            raise
+
     def _send_request(
         self: Self, method: str, url: str, request: dict[str, Any]
     ) -> Response:
@@ -1594,7 +1733,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
 
                 response = session.request(method, url, **request)
 
-            return response.raise_for_status()
+            return self._raise_for_status(response, request)
 
     async def _send_request_async(
         self: Self, method: str, url: str, request: dict[str, Any]
@@ -1611,7 +1750,7 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
 
                 response = await session.request(method, url, **request)
 
-            return response.raise_for_status()
+            return self._raise_for_status(response, request)
 
     def _ratelimit_retry(self: Self, res: Response) -> float:
         """Return the amount of time to wait after encountering a ratelimit."""
