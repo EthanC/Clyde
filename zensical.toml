@@ -1,6 +1,6 @@
 [project]
 site_name = "Clyde"
-site_description = "Documentation for Clyde, a modern, type-hinted Python library for seamless interaction with the Discord Webhook API.."
+site_description = "Documentation for Clyde. Build rich Discord Webhook API interactions with a typed Python API."
 site_url = "https://clyde.e3n.im/"
 site_author = "Ethan C"
 extra_css = ["stylesheets/extra.css"]

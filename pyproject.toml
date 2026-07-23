@@ -1,7 +1,7 @@
 [project]
 name = "discord-clyde"
-version = "0.6.1"
-description = "A modern, type-hinted Python library for seamless interaction with the Discord Webhook API."
+version = "1.0.0"
+description = "Build rich Discord Webhook API interactions with a typed Python API."
 readme = "README.md"
 authors = [
     { name = "Ethan C", email = "16727756+EthanC@users.noreply.github.com" },

@@ -1,5 +1,5 @@
 """
-A modern, type-hinted Python library for seamless interaction with the Discord Webhook API.
+Build rich Discord Webhook API interactions with a typed Python API.
 
 https://github.com/EthanC/Clyde
 """
