@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from time import sleep
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from niquests import Response
@@ -70,6 +71,34 @@ def test_webhook_execute() -> None:
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok
+
+
+def test_webhook_delete() -> None:
+    """Validate synchronous and asynchronous Webhook deletion requests."""
+    webhook = Webhook(
+        url="https://discord.com/api/webhooks/123/token/?wait=True#fragment"
+    )
+    response = Response()
+    expected_url = "https://discord.com/api/webhooks/123/token"
+
+    with patch.object(Webhook, "_send_request", return_value=response) as send:
+        assert webhook.delete() is response
+        send.assert_called_once_with("DELETE", expected_url, {})
+
+    with patch.object(
+        Webhook, "_send_request_async", new_callable=AsyncMock, return_value=response
+    ) as send_async:
+        assert run(webhook.delete_async(reason="Cleanup / café?")) is response
+        send_async.assert_awaited_once_with(
+            "DELETE",
+            expected_url,
+            {"headers": {"X-Audit-Log-Reason": "Cleanup%20%2F%20caf%C3%A9%3F"}},
+        )
+
+    with pytest.raises(ValueError, match="between 1 and 512"):
+        webhook.delete(reason="")
+    with pytest.raises(ValueError, match="between 1 and 512"):
+        run(webhook.delete_async(reason="x" * 513))
 
 
 def test_webhook_edit_message() -> None:

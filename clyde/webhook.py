@@ -6,7 +6,7 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from time import sleep
 from typing import Annotated, Any, Iterable, Literal, Self, TypeAlias
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import msgspec
 import niquests
@@ -451,6 +451,38 @@ class Webhook(Struct, kw_only=True):
         )
 
         return await self._send_request_async("POST", self._base_url(), req)
+
+    def delete(self: Self, reason: str | None = None) -> Response:
+        """
+        Permanently delete the current Webhook using its token.
+
+        https://docs.discord.com/developers/resources/webhook#delete-webhook-with-token
+
+        Arguments:
+            reason (str | None): Optional audit log reason (1-512 characters).
+
+        Returns:
+            res (Response): Response object for the deletion request.
+        """
+        return self._send_request(
+            "DELETE", self._base_url(), self._audit_log_request(reason)
+        )
+
+    async def delete_async(self: Self, reason: str | None = None) -> Response:
+        """
+        Asynchronously and permanently delete the current Webhook using its token.
+
+        https://docs.discord.com/developers/resources/webhook#delete-webhook-with-token
+
+        Arguments:
+            reason (str | None): Optional audit log reason (1-512 characters).
+
+        Returns:
+            res (Response): Response object for the deletion request.
+        """
+        return await self._send_request_async(
+            "DELETE", self._base_url(), self._audit_log_request(reason)
+        )
 
     def edit_message(self: Self, message_id: str) -> Response:
         """
@@ -1016,6 +1048,16 @@ class Webhook(Struct, kw_only=True):
         return urlunsplit(
             (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
         )
+
+    @staticmethod
+    def _audit_log_request(reason: str | None) -> dict[str, Any]:
+        """Return request headers containing an optional audit log reason."""
+        if reason is None:
+            return {}
+        elif not reason or len(reason) > 512:
+            raise ValueError("Audit log reason must be between 1 and 512 characters")
+
+        return {"headers": {"X-Audit-Log-Reason": quote(reason, safe="")}}
 
     def _remove_query_param(self: Self, key: str) -> None:
         """Remove a query parameter from stored and URL-provided state."""
