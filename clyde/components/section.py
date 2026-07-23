@@ -5,7 +5,7 @@ from typing import Annotated, Self
 import msgspec
 from msgspec import Meta
 
-from clyde.component import Component, ComponentTypes
+from clyde.component import Component, ComponentTypes, _ComponentOwner
 from clyde.components.button import LinkButton
 from clyde.components.text_display import TextDisplay
 from clyde.components.thumbnail import Thumbnail
@@ -51,11 +51,22 @@ class Section(Component, kw_only=True, tag="Section"):
 
         Returns:
             self (Section): The modified Section instance.
+
+        Raises:
+            ValueError: The addition would exceed an owning message's 40 total
+                Component limit.
         """
+        components: list[TextDisplay]
+
         if isinstance(component, TextDisplay):
-            self.components.append(component)
+            components = [component]
         else:
-            self.components.extend(component)
+            components = list(component)
+
+        owners: list[_ComponentOwner] = self._validate_component_addition(components)
+        self.components = [*self.components, *components]
+
+        self._synchronize_component_owners(owners)
 
         return self
 
@@ -72,14 +83,19 @@ class Section(Component, kw_only=True, tag="Section"):
         Returns:
             self (Section): The modified Section instance.
         """
+        owners: list[_ComponentOwner] = self._active_component_owners()
+        components: list[TextDisplay] = self.components.copy()
+
         if isinstance(component, TextDisplay):
-            self.components.remove(component)
+            components.remove(component)
         elif isinstance(component, int):
-            self.components.pop(component)
+            components.pop(component)
         else:
-            self.components = [
-                entry for entry in self.components if entry not in component
-            ]
+            components = [entry for entry in components if entry not in component]
+
+        self.components = components
+
+        self._synchronize_component_owners(owners)
 
         return self
 
@@ -94,6 +110,9 @@ class Section(Component, kw_only=True, tag="Section"):
         Returns:
             self (Section): The modified Section instance.
         """
+        owners: list[_ComponentOwner] = self._active_component_owners()
         self.accessory = accessory
+
+        self._synchronize_component_owners(owners)
 
         return self

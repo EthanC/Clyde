@@ -6,8 +6,9 @@ from base64 import b64encode
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from time import sleep
-from typing import Annotated, Any, Iterable, Literal, Self, TypeAlias
+from typing import Annotated, Any, Final, Iterable, Literal, Self, TypeAlias
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from weakref import ReferenceType, ref
 
 import msgspec
 import niquests
@@ -15,6 +16,14 @@ from msgspec import UNSET, Meta, Struct, UnsetType
 from niquests import AsyncSession, Response, Session
 
 from clyde.attachment import Attachment
+from clyde.component import (
+    Component,
+    _count_component_occurrences,
+    _count_components,
+    _iter_components,
+    _register_component_owner,
+    _unregister_component_owner,
+)
 from clyde.components.action_row import ActionRow
 from clyde.components.container import Container
 from clyde.components.file import File
@@ -22,7 +31,10 @@ from clyde.components.media_gallery import MediaGallery
 from clyde.components.section import Section
 from clyde.components.seperator import Seperator
 from clyde.components.text_display import TextDisplay
-from clyde.constants import ATTACHMENT_DESCRIPTION_MAX_LENGTH
+from clyde.constants import (
+    ATTACHMENT_DESCRIPTION_MAX_LENGTH,
+    MESSAGE_COMPONENT_MAX_COUNT,
+)
 from clyde.embed import Embed
 from clyde.message import Message
 from clyde.poll import Poll
@@ -58,6 +70,7 @@ _EDIT_PAYLOAD_FIELDS: tuple[str, ...] = (
 _EXECUTE_QUERY_FIELDS: tuple[str, ...] = ("wait", "thread_id", "with_components")
 _EDIT_QUERY_FIELDS: tuple[str, ...] = ("thread_id", "with_components")
 _MESSAGE_QUERY_FIELDS: tuple[str, ...] = ("thread_id",)
+_OWNED_COMPONENTS_KEY: Final[str] = "_clyde_owned_components"
 _AVATAR_MEDIA_TYPES: tuple[tuple[bytes, str], ...] = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
     (b"\xff\xd8\xff", "image/jpeg"),
@@ -335,7 +348,7 @@ class MessageFlags(IntEnum):
     """Allows you to create fully Component-driven messages."""
 
 
-class Webhook(Struct, kw_only=True):
+class Webhook(Struct, kw_only=True, dict=True, weakref=True):
     """
     Represent a Discord Webhook object.
 
@@ -469,6 +482,14 @@ class Webhook(Struct, kw_only=True):
 
     _query_params: dict[str, str] = {}
     """Additional query parameters to append to the URL."""
+
+    def __post_init__(self: Self) -> None:
+        """Register this Webhook with its initial Component tree."""
+        self._sync_component_owners()
+
+    def __copy__(self: Self) -> Self:
+        """Create a shallow copy with rebuilt Component ownership state."""
+        return msgspec.structs.replace(self)
 
     def execute(self: Self) -> Response:
         """
@@ -870,17 +891,31 @@ class Webhook(Struct, kw_only=True):
 
         Returns:
             self (Webhook): The modified Webhook instance.
-        """
-        if not isinstance(self.components, list):
-            self.components = []
 
-        if not self.get_flag(MessageFlags.IS_COMPONENTS_V2):
-            self.set_flag(MessageFlags.IS_COMPONENTS_V2, True)
+        Raises:
+            ValueError: The addition would exceed the 40 total Component limit.
+        """
+        components: list[TopLevelComponent]
 
         if isinstance(component, TopLevelComponent):
-            self.components.append(component)
+            components = [component]
         else:
-            self.components.extend(component)
+            components = list(component)
+
+        self._sync_component_owners()
+
+        current_components: list[TopLevelComponent] = (
+            self.components if isinstance(self.components, list) else []
+        )
+
+        self._validate_component_count(
+            _count_components(current_components) + _count_components(components)
+        )
+
+        self.components = [*current_components, *components]
+
+        self.set_flag(MessageFlags.IS_COMPONENTS_V2, True)
+        self._sync_component_owners()
 
         return self
 
@@ -901,18 +936,22 @@ class Webhook(Struct, kw_only=True):
         if component is None:
             self.components = []
         elif isinstance(self.components, list):
+            components: list[TopLevelComponent] = self.components.copy()
+
             if isinstance(component, TopLevelComponent):
-                self.components.remove(component)
+                components.remove(component)
             elif isinstance(component, int):
-                self.components.pop(component)
+                components.pop(component)
             else:
-                self.components = [
-                    entry for entry in self.components if entry not in component
-                ]
+                components = [entry for entry in components if entry not in component]
 
             # Do not retain an empty list
-            if len(self.components) == 0:
+            if len(components) == 0:
                 self.components = UNSET
+            else:
+                self.components = components
+
+        self._sync_component_owners()
 
         return self
 
@@ -1159,6 +1198,8 @@ class Webhook(Struct, kw_only=True):
 
     def _validate(self: Self, edit: bool = False) -> None:
         """Convert applicable data types prior to Webhook serialization."""
+        self._sync_component_owners()
+
         if isinstance(self.embeds, list):
             for embed in self.embeds:
                 if not isinstance(embed.color, UnsetType):
@@ -1184,6 +1225,12 @@ class Webhook(Struct, kw_only=True):
         ):
             return
 
+        components: list[TopLevelComponent] = (
+            self.components if isinstance(self.components, list) else []
+        )
+
+        self._validate_component_count(_count_components(components))
+
         if edit and self.embeds is None:
             self.embeds = []
 
@@ -1203,6 +1250,66 @@ class Webhook(Struct, kw_only=True):
         if incompatible_fields:
             fields: str = ", ".join(incompatible_fields)
             raise ValueError(f"COMPONENTS cannot be combined with non-null {fields}")
+
+    def _sync_component_owners(self: Self) -> None:
+        """Synchronize non-serialized ownership for the current Component tree."""
+        previous_references: list[ReferenceType[Component]] = self.__dict__.get(
+            _OWNED_COMPONENTS_KEY, []
+        )
+        previous_components: list[Component] = []
+
+        for reference in previous_references:
+            component: Component | None = reference()
+
+            if component is not None:
+                previous_components.append(component)
+
+        _unregister_component_owner(previous_components, self)
+
+        current_components: list[Component] = (
+            list(_iter_components(self.components))
+            if isinstance(self.components, list)
+            else []
+        )
+
+        _register_component_owner(current_components, self)
+
+        current_references: list[ReferenceType[Component]] = [
+            ref(component) for component in current_components
+        ]
+        self.__dict__[_OWNED_COMPONENTS_KEY] = current_references
+
+    def _component_occurrences(self: Self, component: Component) -> int:
+        """Return the number of times a Component occurs in this message tree."""
+        if not isinstance(self.components, list):
+            return 0
+
+        return _count_component_occurrences(self.components, component)
+
+    def _validate_nested_component_addition(
+        self: Self, parent: Component, components: Iterable[Component]
+    ) -> None:
+        """Validate a nested addition against this message's total count."""
+        if not self.get_flag(MessageFlags.IS_COMPONENTS_V2):
+            return
+
+        current_components: list[TopLevelComponent] = (
+            self.components if isinstance(self.components, list) else []
+        )
+        projected_count: int = _count_components(current_components) + (
+            self._component_occurrences(parent) * _count_components(components)
+        )
+
+        self._validate_component_count(projected_count)
+
+    @staticmethod
+    def _validate_component_count(component_count: int) -> None:
+        """Validate a Components V2 message's total Component count."""
+        if component_count > MESSAGE_COMPONENT_MAX_COUNT:
+            raise ValueError(
+                "Components V2 messages cannot contain more than "
+                f"{MESSAGE_COMPONENT_MAX_COUNT} total Components"
+            )
 
     def _validate_edit(self: Self, message_id: str) -> None:
         """Validate fields specific to editing a Webhook message."""
