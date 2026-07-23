@@ -429,9 +429,8 @@ def test_component_mutator_branches() -> None:
     assert file.spoiler is UNSET
 
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
-    webhook.add_attachment("component.txt", b"Component attachment")
     webhook.add_component(
-        [action_row, container, plain_container, gallery, section, seperator, file]
+        [action_row, container, plain_container, gallery, section, seperator]
     )
     res: Response = webhook.execute()
 

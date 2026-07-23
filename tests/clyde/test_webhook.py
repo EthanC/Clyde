@@ -168,7 +168,9 @@ def test_webhook_delete() -> None:
 
 def test_webhook_get_message() -> None:
     """Validate synchronous and asynchronous message retrieval against Discord."""
-    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT).set_wait(True)
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT).set_wait(
+        True
+    )
     created: Response = webhook.execute()
     message_id: str = created.json()["id"]
     getter: Webhook = Webhook(url=f"{STRING_URL_WEBHOOK}/?wait=True#fragment")
@@ -873,8 +875,9 @@ def test_webhook_edit_validation_branches() -> None:
             answers=[PollAnswer(poll_media=PollMediaAnswer(text="Answer"))],
         ),
     )
+    invalid_components.add_attachment("component.txt", b"Component attachment")
     invalid_components.add_component(TextDisplay(content=STRING_SHORT))
-    with pytest.raises(ValueError, match="non-null content, embeds, poll"):
+    with pytest.raises(ValueError, match=r"non-null content, embeds, files\[n\], poll"):
         invalid_components.execute()
 
     assert editor.retain_attachment(attachment_id, description="First") is editor

@@ -1237,14 +1237,13 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
         incompatible_fields: dict[str, Any] = {
             "content": self.content,
             "embeds": self.embeds,
+            "files[n]": self._valid_attachments(),
             "poll": self.poll,
         }
         incompatible_fields = {
             name: value
             for name, value in incompatible_fields.items()
-            if not isinstance(value, UnsetType)
-            and value is not None
-            and not (name == "embeds" and value == [])
+            if not isinstance(value, UnsetType) and value is not None and value != []
         }
 
         if incompatible_fields:
