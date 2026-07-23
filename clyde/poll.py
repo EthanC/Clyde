@@ -223,12 +223,9 @@ class Poll(Struct, kw_only=True):
         Returns:
             self (Poll): The modified Poll instance.
         """
-        if not self.answers:
-            self.answers = []
-
         if isinstance(answer, PollAnswer):
             self.answers.append(answer)
-        elif isinstance(answer, Iterable):
+        else:
             self.answers.extend(answer)
 
         return self

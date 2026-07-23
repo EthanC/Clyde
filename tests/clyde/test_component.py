@@ -1,12 +1,14 @@
 from time import sleep
 
 import pytest
+from msgspec import UNSET
 from niquests import Response
 
 from clyde import Webhook
 from clyde.components import (
     ActionRow,
     Container,
+    File,
     LinkButton,
     MediaGallery,
     MediaGalleryItem,
@@ -17,6 +19,8 @@ from clyde.components import (
     Thumbnail,
     UnfurledMediaItem,
 )
+from clyde.components.button import ButtonStyles
+from clyde.components.container import ContainerComponent
 
 from .constants import (
     FLOAT_TEST_DELAY,
@@ -327,6 +331,108 @@ def test_component_unfurled_media_item() -> None:
     gallery.add_item(frame)
     webhook.add_component(gallery)
 
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.ok
+
+
+def test_component_mutator_branches() -> None:
+    """Validate every Component collection and optional-field mutation."""
+    buttons: list[LinkButton] = [
+        LinkButton(label=f"Link {index}", url=STRING_URL_GITHUB) for index in range(5)
+    ]
+    action_row: ActionRow = ActionRow(components=buttons[:3])
+    assert action_row.add_component(buttons[3:]) is action_row
+    assert action_row.remove_component(buttons[0]) is action_row
+    assert action_row.remove_component(0) is action_row
+    assert action_row.remove_component([buttons[2], buttons[4]]) is action_row
+    assert buttons[3].set_style(ButtonStyles.LINK) is buttons[3]
+
+    container_text: list[ContainerComponent] = [
+        TextDisplay(content=f"Container {index}") for index in range(5)
+    ]
+    container: Container = Container(
+        components=container_text[:2], accent_color=STRING_COLOR_BLACK, spoiler=True
+    )
+    assert container.add_component(container_text[2:]) is container
+    assert container.remove_component(container_text[0]) is container
+    assert container.remove_component(0) is container
+    assert (
+        container.remove_component([container_text[2], container_text[4]]) is container
+    )
+    assert container.remove_accent_color() is container
+    assert container.accent_color is UNSET
+    assert container.set_accent_color(0x0E0E0E) is container
+    assert container.remove_spoiler() is container
+    assert container.spoiler is UNSET
+    plain_container = Container(components=[TextDisplay(content="No accent color")])
+
+    gallery_items: list[MediaGalleryItem] = [
+        MediaGalleryItem(media=UnfurledMediaItem(url=url))
+        for url in (
+            STRING_URL_IMAGE_1,
+            STRING_URL_IMAGE_2,
+            STRING_URL_IMAGE_3,
+            STRING_URL_IMAGE_4,
+            STRING_URL_ICON_1,
+        )
+    ]
+    first_item: MediaGalleryItem = gallery_items[0]
+    assert first_item.set_media(STRING_URL_IMAGE_1) is first_item
+    assert first_item.set_description(STRING_SHORT) is first_item
+    assert first_item.remove_description() is first_item
+    assert first_item.description is UNSET
+    assert first_item.set_spoiler(True) is first_item
+    assert first_item.remove_spoiler() is first_item
+    assert first_item.spoiler is UNSET
+
+    gallery: MediaGallery = MediaGallery(items=gallery_items[:3])
+    assert gallery.add_item(gallery_items[3:]) is gallery
+    assert gallery.remove_item(gallery_items[0]) is gallery
+    assert gallery.remove_item(0) is gallery
+    assert gallery.remove_item([gallery_items[2], gallery_items[4]]) is gallery
+
+    section_text: list[TextDisplay] = [
+        TextDisplay(content=f"Section {index}") for index in range(3)
+    ]
+    thumbnail_media = UnfurledMediaItem(url=STRING_URL_ICON_2)
+    thumbnail: Thumbnail = Thumbnail(
+        media=UnfurledMediaItem(url=STRING_URL_ICON_1),
+        description=STRING_SHORT,
+        spoiler=True,
+    )
+    assert thumbnail.set_media(thumbnail_media) is thumbnail
+    assert thumbnail.media is thumbnail_media
+    assert thumbnail.remove_description() is thumbnail
+    assert thumbnail.description is UNSET
+    assert thumbnail.remove_spoiler() is thumbnail
+    assert thumbnail.spoiler is UNSET
+
+    section: Section = Section(components=section_text[:1], accessory=thumbnail)
+    assert section.add_component(section_text[1:]) is section
+    assert section.remove_component(0) is section
+    assert section.remove_component([section_text[1]]) is section
+
+    seperator: Seperator = Seperator(divider=True, spacing=SeperatorSpacing.LARGE)
+    assert seperator.remove_divider() is seperator
+    assert seperator.divider is UNSET
+    assert seperator.remove_spacing() is seperator
+    assert seperator.spacing is UNSET
+
+    file_media = UnfurledMediaItem(url="attachment://component.txt")
+    file: File = File(file=UnfurledMediaItem(url="attachment://old.txt"))
+    assert file.set_file("attachment://intermediate.txt") is file
+    assert file.set_file(file_media) is file
+    assert file.file is file_media
+    assert file.set_spoiler(True) is file
+    assert file.remove_spoiler() is file
+    assert file.spoiler is UNSET
+
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    webhook.add_attachment("component.txt", b"Component attachment")
+    webhook.add_component(
+        [action_row, container, plain_container, gallery, section, seperator, file]
+    )
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok

@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 from time import sleep
+from typing import Any, cast
 
 import pytest
+from msgspec import UNSET
 from niquests import Response
 
 from clyde import (
@@ -131,6 +133,75 @@ def test_embed_timestamp_datetime() -> None:
     embed.set_timestamp(datetime.now(UTC))
     webhook.add_embed(embed)
 
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.ok
+
+
+def test_embed_mutator_branches() -> None:
+    """Validate optional removers and every Embed Field collection path."""
+    author: EmbedAuthor = EmbedAuthor(
+        name=STRING_WORD, url=STRING_URL_GITHUB, icon_url=STRING_URL_ICON_1
+    )
+    assert author.remove_url() is author
+    assert author.url is UNSET
+    assert author.remove_icon_url() is author
+    assert author.icon_url is UNSET
+
+    embed: Embed = Embed(
+        title=STRING_SHORT,
+        description=STRING_LONG_MARKDOWN,
+        url=STRING_URL_GITHUB,
+        timestamp=STRING_TIMESTAMP,
+        color=STRING_COLOR_WHITE,
+        footer=EmbedFooter(text=STRING_SHORT),
+        image=EmbedImage(url=STRING_URL_IMAGE_1),
+        thumbnail=EmbedThumbnail(url=STRING_URL_ICON_1),
+        author=author,
+    )
+    for field_name, remover in (
+        ("title", embed.remove_title),
+        ("description", embed.remove_description),
+        ("url", embed.remove_url),
+        ("timestamp", embed.remove_timestamp),
+        ("color", embed.remove_color),
+        ("footer", embed.remove_footer),
+        ("image", embed.remove_image),
+        ("thumbnail", embed.remove_thumbnail),
+        ("author", embed.remove_author),
+    ):
+        assert remover() is embed
+        assert getattr(embed, field_name) is UNSET
+
+    fields: list[EmbedField] = [
+        EmbedField(name=f"Field {index}", value=str(index)) for index in range(3)
+    ]
+    assert embed.remove_field(fields[0]) is embed
+    assert embed.add_field(fields) is embed
+    assert embed.remove_field(fields[0]) is embed
+    assert embed.remove_field(0) is embed
+    assert embed.remove_field([fields[0]]) is embed
+    assert embed.fields == [fields[2]]
+    assert embed.remove_field([fields[2]]) is embed
+    assert embed.fields is UNSET
+
+    embed.set_description(STRING_SHORT).add_field(fields[0])
+    res: Response = Webhook(url=STRING_URL_WEBHOOK).add_embed(embed).execute()
+
+    assert isinstance(res, Response) and res.ok
+
+
+def test_embed_validation_input_types() -> None:
+    """Validate direct timestamp and color inputs through Discord serialization."""
+    embeds: list[Embed] = [
+        Embed(
+            description="Integer", timestamp=cast(Any, INT_TIMESTAMP), color=0xFFFFFF
+        ),
+        Embed(description="Float", timestamp=cast(Any, FLOAT_TIMESTAMP)),
+        Embed(description="Datetime", timestamp=cast(Any, datetime.now(UTC))),
+    ]
+    webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
+    assert webhook.add_embed(embeds) is webhook
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok

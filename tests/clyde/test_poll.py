@@ -1,6 +1,7 @@
 from time import sleep
 
 import pytest
+from msgspec import UNSET
 from niquests import Response
 
 from clyde import Poll, PollAnswer, PollMediaAnswer, PollMediaQuestion, Webhook
@@ -88,4 +89,43 @@ def test_poll_answers_validate() -> None:
     res: Response = webhook.execute()
 
     # Webhook execution is expected to fail due to too many answers
+    assert isinstance(res, Response) and res.ok
+
+
+def test_poll_mutator_branches() -> None:
+    """Validate every Poll mutator before sending the result to Discord."""
+    question: PollMediaQuestion = PollMediaQuestion(text="Original question")
+    assert question.remove_text() is question
+    assert question.text is UNSET
+    assert question.set_text("Updated question") is question
+
+    media: PollMediaAnswer = PollMediaAnswer(text="Original answer")
+    assert media.remove_text() is media
+    assert media.text is UNSET
+    assert media.set_text("Updated answer") is media
+    assert media.set_emoji("wave") is media
+    assert media.remove_emoji() is media
+    assert media.emoji is UNSET
+
+    answers: list[PollAnswer] = [
+        PollAnswer(poll_media=PollMediaAnswer(text=label))
+        for label in ("A", "B", "C", "D")
+    ]
+    assert answers[0].set_poll_media(media) is answers[0]
+
+    poll: Poll = Poll(question=PollMediaQuestion(text="Old"), answers=answers[:3])
+    assert poll.set_question(question) is poll
+    assert poll.remove_answer(answers[0]) is poll
+    assert poll.remove_answer([answers[1]]) is poll
+    assert poll.add_answer([answers[0], answers[1]]) is poll
+    assert poll.add_answer(answers[3]) is poll
+    assert poll.set_duration(48) is poll
+    assert poll.remove_duration() is poll
+    assert poll.duration is UNSET
+    assert poll.set_allow_multiselect(True) is poll
+    assert poll.remove_allow_multiselect() is poll
+    assert poll.allow_multiselect is UNSET
+
+    res: Response = Webhook(url=STRING_URL_WEBHOOK).set_poll(poll).execute()
+
     assert isinstance(res, Response) and res.ok

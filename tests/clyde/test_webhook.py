@@ -1,4 +1,7 @@
-from asyncio import run
+import logging
+from asyncio import gather, run
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from time import sleep
 
@@ -6,11 +9,16 @@ import pytest
 from niquests import Response
 
 from clyde import (
+    UNSET,
     AllowedMentions,
     AllowedMentionTypes,
     Attachment,
     Embed,
     Markdown,
+    Poll,
+    PollAnswer,
+    PollMediaAnswer,
+    PollMediaQuestion,
     Timestamp,
     Webhook,
 )
@@ -19,6 +27,7 @@ from clyde.webhook import MessageFlags
 
 from .constants import (
     FLOAT_TEST_DELAY,
+    FLOAT_TIMESTAMP,
     INT_TIMESTAMP,
     STRING_EMPTY,
     STRING_EXTRA_LONG,
@@ -32,6 +41,7 @@ from .constants import (
     STRING_LONG_MARKDOWN,
     STRING_MEDIUM,
     STRING_SHORT,
+    STRING_TIMESTAMP,
     STRING_URL_GITHUB,
     STRING_URL_ICON_1,
     STRING_URL_WEBHOOK,
@@ -223,6 +233,7 @@ def test_webhook_set_content_fallback() -> None:
     """
     webhook: Webhook = Webhook(url=STRING_URL_WEBHOOK)
 
+    webhook.set_content(STRING_SHORT, fallback=True)
     webhook.set_content(STRING_EXTRA_LONG, fallback=True)
 
     res: Response = webhook.execute()
@@ -518,10 +529,12 @@ def test_webhook_markdown() -> None:
 
     content: str = ""
 
+    content += Markdown.block_quote(STRING_SHORT) + "\n"
     content += Markdown.block_quote(STRING_MEDIUM, multi_line=False) + "\n"
     content += Markdown.bold(STRING_EXTRA_SHORT) + "\n"
     content += Markdown.bulleted_list(STRING_LIST_SHORT) + "\n"
     content += Markdown.code_block(STRING_LONG) + "\n"
+    content += Markdown.code_block(STRING_SHORT, "python") + "\n"
     content += Markdown.header_1(STRING_EXTRA_SHORT) + "\n"
     content += Markdown.header_2(STRING_EXTRA_SHORT) + "\n"
     content += Markdown.header_3(STRING_EXTRA_SHORT) + "\n"
@@ -558,9 +571,258 @@ def test_webhook_timestamp() -> None:
     content += Timestamp.short_date(INT_TIMESTAMP) + "\n"
     content += Timestamp.short_date_time(INT_TIMESTAMP) + "\n"
     content += Timestamp.short_time(INT_TIMESTAMP) + "\n"
+    content += Timestamp.short_time(FLOAT_TIMESTAMP) + "\n"
+    content += Timestamp.short_time(STRING_TIMESTAMP) + "\n"
+    content += (
+        Timestamp.short_time(datetime.fromtimestamp(INT_TIMESTAMP, tz=UTC)) + "\n"
+    )
 
     webhook.set_content(content=content)
 
     res: Response = webhook.execute()
 
     assert isinstance(res, Response) and res.ok
+
+
+def test_webhook_allowed_mentions_branches() -> None:
+    """Validate Allowed Mentions mutations through a live Webhook request."""
+    blocked_users = AllowedMentions(users=[STRING_ID_USER])
+    assert blocked_users.add_parse(AllowedMentionTypes.USER_MENTIONS) is blocked_users
+    assert blocked_users.parse is UNSET
+
+    blocked_roles = AllowedMentions(roles=[STRING_ID_ROLE])
+    assert blocked_roles.add_parse(AllowedMentionTypes.ROLE_MENTIONS) is blocked_roles
+    assert blocked_roles.parse is UNSET
+
+    mentions = AllowedMentions()
+    assert mentions.remove_parse(AllowedMentionTypes.USER_MENTIONS) is mentions
+    assert mentions.add_parse(list(AllowedMentionTypes)) is mentions
+    assert mentions.remove_parse(AllowedMentionTypes.USER_MENTIONS) is mentions
+    assert mentions.remove_parse(0) is mentions
+    assert (
+        mentions.add_parse(
+            [AllowedMentionTypes.USER_MENTIONS, AllowedMentionTypes.ROLE_MENTIONS]
+        )
+        is mentions
+    )
+    assert (
+        mentions.remove_parse(
+            [AllowedMentionTypes.USER_MENTIONS, AllowedMentionTypes.ROLE_MENTIONS]
+        )
+        is mentions
+    )
+    assert mentions.remove_parse(AllowedMentionTypes.EVERYONE_MENTIONS) is mentions
+    assert mentions.parse is UNSET
+
+    role_blocked = AllowedMentions(parse=[AllowedMentionTypes.ROLE_MENTIONS])
+    assert role_blocked.add_role(STRING_ID_ROLE) is role_blocked
+    assert role_blocked.roles is UNSET
+    assert mentions.remove_role(STRING_ID_ROLE) is mentions
+    assert mentions.add_role([STRING_ID_ROLE]) is mentions
+    assert mentions.add_role("0") is mentions
+    assert mentions.remove_role(STRING_ID_ROLE) is mentions
+    assert mentions.remove_role(0) is mentions
+    assert mentions.add_role([STRING_ID_ROLE, "0"]) is mentions
+    assert mentions.remove_role([STRING_ID_ROLE]) is mentions
+    assert mentions.remove_role(["0"]) is mentions
+    assert mentions.roles is UNSET
+
+    user_blocked = AllowedMentions(parse=[AllowedMentionTypes.USER_MENTIONS])
+    assert user_blocked.add_user(STRING_ID_USER) is user_blocked
+    assert user_blocked.users is UNSET
+    assert mentions.remove_user(STRING_ID_USER) is mentions
+    assert mentions.add_user([STRING_ID_USER]) is mentions
+    assert mentions.add_user("0") is mentions
+    assert mentions.remove_user(STRING_ID_USER) is mentions
+    assert mentions.remove_user(0) is mentions
+    assert mentions.add_user([STRING_ID_USER, "0"]) is mentions
+    assert mentions.remove_user([STRING_ID_USER]) is mentions
+    assert mentions.remove_user(["0"]) is mentions
+    assert mentions.users is UNSET
+    assert mentions.set_replied_user(False) is mentions
+
+    res: Response = (
+        Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+        .set_allowed_mentions(mentions)
+        .execute()
+    )
+
+    assert isinstance(res, Response) and res.ok
+
+
+def test_webhook_collection_branches() -> None:
+    """Validate Webhook Embed and Component collection operations live."""
+    embeds = [Embed(description=f"Embed {index}") for index in range(5)]
+    embed_webhook = Webhook(url=STRING_URL_WEBHOOK)
+    assert embed_webhook.remove_embed(embeds[0]) is embed_webhook
+    assert embed_webhook.add_embed(embeds[:3]) is embed_webhook
+    assert embed_webhook.add_embed(embeds[3]) is embed_webhook
+    assert embed_webhook.remove_embed(embeds[0]) is embed_webhook
+    assert embed_webhook.remove_embed(0) is embed_webhook
+    assert embed_webhook.remove_embed([embeds[2]]) is embed_webhook
+    assert embed_webhook.remove_embed([embeds[3]]) is embed_webhook
+    assert embed_webhook.embeds is UNSET
+    embed_webhook.add_embed(embeds[4])
+    embed_res: Response = embed_webhook.execute()
+
+    components = [TextDisplay(content=f"Component {index}") for index in range(4)]
+    component_webhook = Webhook(url=STRING_URL_WEBHOOK)
+    assert component_webhook.remove_component(components[0]) is component_webhook
+    assert component_webhook.add_component(components[:3]) is component_webhook
+    assert component_webhook.add_component(components[3]) is component_webhook
+    assert component_webhook.remove_component(components[0]) is component_webhook
+    assert component_webhook.remove_component(0) is component_webhook
+    assert component_webhook.remove_component([components[2]]) is component_webhook
+    assert component_webhook.remove_component([components[3]]) is component_webhook
+    assert component_webhook.components is UNSET
+    assert component_webhook.remove_component(None) is component_webhook
+    component_webhook.add_component(components[0])
+    component_res: Response = component_webhook.execute()
+
+    assert isinstance(embed_res, Response) and embed_res.ok
+    assert isinstance(component_res, Response) and component_res.ok
+
+
+def test_webhook_attachment_branches() -> None:
+    """Validate Attachment mutations and filtering through Discord."""
+    path_attachment = Attachment(filename="path.txt")
+    assert (
+        path_attachment.set_content(Path("tests/clyde/data/file_plaintext.txt"))
+        is path_attachment
+    )
+    assert isinstance(path_attachment.content, bytes)
+    with pytest.raises(ValueError, match="1,024 or fewer"):
+        path_attachment.set_description("x" * 1025)
+
+    unnamed = Attachment()
+    assert unnamed.set_spoiler(True) is unnamed
+    assert unnamed.filename is UNSET
+    prefixed = Attachment(filename="SPOILER_report.txt", content=b"report")
+    assert prefixed.set_spoiler(False) is prefixed
+    assert prefixed.filename == "report.txt"
+
+    attachments = [
+        Attachment(filename=f"file-{index}.txt", content=str(index).encode())
+        for index in range(5)
+    ]
+    webhook = Webhook(url=f"{STRING_URL_WEBHOOK}?wait=False")
+    webhook._attachments.extend(attachments)
+    assert webhook.remove_attachment(attachments[0]) is webhook
+    assert webhook.remove_attachment(0) is webhook
+    assert webhook.remove_attachment("file-2.txt") is webhook
+    assert webhook.remove_attachment([attachments[3]]) is webhook
+    webhook._attachments.append(Attachment())
+    assert webhook.set_wait(None) is webhook
+    assert "wait=" not in webhook.url
+    webhook.set_wait(True)
+    res: Response = webhook.execute()
+
+    assert isinstance(res, Response) and res.ok
+    assert res.json()["attachments"][0]["filename"] == "file-4.txt"
+
+
+def test_webhook_edit_validation_branches() -> None:
+    """Validate edit-only failures and perform a real attachment edit."""
+    created: Response = (
+        Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+        .set_wait(True)
+        .add_attachment("original.txt", b"original")
+        .execute()
+    )
+    created_data: dict = created.json()
+    message_id: str = created_data["id"]
+    attachment_id: str = created_data["attachments"][0]["id"]
+
+    editor = Webhook(url=STRING_URL_WEBHOOK, content=STRING_MEDIUM)
+    with pytest.raises(ValueError, match="attachment_id must not be empty"):
+        editor.retain_attachment("")
+    with pytest.raises(ValueError, match="1024 or fewer"):
+        editor.retain_attachment(attachment_id, description="x" * 1025)
+    with pytest.raises(ValueError, match="message_id must not be empty"):
+        editor.edit_message("")
+
+    invalid_flags = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    invalid_flags.set_flag(MessageFlags.SUPPRESS_NOTIFICATIONS, True)
+    with pytest.raises(ValueError, match="only support SUPPRESS_EMBEDS"):
+        invalid_flags.edit_message(message_id)
+
+    missing_manifest = Webhook(url=STRING_URL_WEBHOOK, content=STRING_SHORT)
+    missing_manifest.add_attachment("new.txt", b"new")
+    with pytest.raises(ValueError, match=r"Call retain_attachment\(\)"):
+        missing_manifest.edit_message(message_id)
+
+    invalid_components = Webhook(
+        url=STRING_URL_WEBHOOK,
+        content=STRING_SHORT,
+        embeds=[Embed(description=STRING_SHORT)],
+        poll=Poll(
+            question=PollMediaQuestion(text="Question"),
+            answers=[PollAnswer(poll_media=PollMediaAnswer(text="Answer"))],
+        ),
+    )
+    invalid_components.add_component(TextDisplay(content=STRING_SHORT))
+    with pytest.raises(ValueError, match="non-null content, embeds, poll"):
+        invalid_components.execute()
+
+    assert editor.retain_attachment(attachment_id, description="First") is editor
+    assert editor.retain_attachment(attachment_id, description="Updated") is editor
+    editor.add_attachment("new.txt", b"new")
+    editor.set_flag(MessageFlags.SUPPRESS_EMBEDS, True)
+    edited: Response = editor.edit_message(message_id)
+
+    assert isinstance(edited, Response) and edited.ok
+    assert len(edited.json()["attachments"]) == 2
+
+
+def test_webhook_sync_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
+    """Trigger and recover from a real synchronous Discord rate limit."""
+    caplog.set_level(logging.WARNING)
+    responses: list[Response] = []
+
+    for _ in range(3):
+        caplog.clear()
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            responses = list(
+                executor.map(
+                    lambda index: Webhook(
+                        url=STRING_URL_WEBHOOK, content=f"Sync rate limit {index}"
+                    ).execute(),
+                    range(8),
+                )
+            )
+
+        if any(record.message.startswith("Rate-limited") for record in caplog.records):
+            break
+
+    assert responses and all(response.ok for response in responses)
+    assert any(record.message.startswith("Rate-limited") for record in caplog.records)
+
+    webhook = Webhook(url=STRING_URL_WEBHOOK, content="Default retry delay")
+    successful: Response = webhook.set_wait(True).execute()
+    assert webhook._ratelimit_retry(successful) == 5.0
+
+
+def test_webhook_async_ratelimit(caplog: pytest.LogCaptureFixture) -> None:
+    """Trigger and recover from a real asynchronous Discord rate limit."""
+
+    async def execute_batch() -> list[Response]:
+        return await gather(
+            *[
+                Webhook(
+                    url=STRING_URL_WEBHOOK, content=f"Async rate limit {index}"
+                ).execute_async()
+                for index in range(8)
+            ]
+        )
+
+    caplog.set_level(logging.WARNING)
+    responses: list[Response] = []
+
+    for _ in range(3):
+        caplog.clear()
+        responses = run(execute_batch())
+        if any(record.message.startswith("Rate-limited") for record in caplog.records):
+            break
+
+    assert responses and all(response.ok for response in responses)
+    assert any(record.message.startswith("Rate-limited") for record in caplog.records)

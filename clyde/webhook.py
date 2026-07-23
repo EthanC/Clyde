@@ -667,7 +667,7 @@ class Webhook(Struct, kw_only=True):
 
         if isinstance(component, TopLevelComponent):
             self.components.append(component)
-        elif isinstance(component, Iterable):
+        else:
             self.components.extend(component)
 
         return self
@@ -1132,10 +1132,7 @@ class Webhook(Struct, kw_only=True):
             files: dict[str, Any] = {"payload_json": (None, payload_json)}
 
             for index, attachment in enumerate(attachments):
-                if isinstance(attachment.filename, str) and isinstance(
-                    attachment.content, bytes
-                ):
-                    files[f"files[{index}]"] = (attachment.filename, attachment.content)
+                files[f"files[{index}]"] = (attachment.filename, attachment.content)
 
             return {"files": files, "params": params}
 

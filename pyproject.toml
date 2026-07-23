@@ -69,6 +69,14 @@ strict_xfail = true
 log_cli = true
 log_cli_level = "DEBUG"
 
+[tool.coverage.run]
+branch = true
+source = ["clyde"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["clyde"]
 
