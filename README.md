@@ -1,145 +1,121 @@
-![Clyde](/assets/readme_banner.png)
+<p align="center">
+  <img src="assets/readme_banner.png" alt="Clyde">
+</p>
 
-![Python](https://img.shields.io/badge/Python-3-blue?logo=python&logoColor=white)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ethanc/clyde/workflow.yaml)
-![PyPI Downloads](https://img.shields.io/pypi/dm/discord-clyde)
-[![Coverage Report](https://codecov.io/gh/ethanc/clyde/branch/main/graph/badge.svg)](https://codecov.io/gh/ethanc/clyde)
+<p align="center">
+  <a href="https://pypi.org/project/discord-clyde/"><img src="https://img.shields.io/pypi/v/discord-clyde" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/discord-clyde/"><img src="https://img.shields.io/pypi/pyversions/discord-clyde" alt="Supported Python versions"></a>
+  <a href="https://github.com/EthanC/Clyde/actions/workflows/workflow.yaml"><img src="https://img.shields.io/github/actions/workflow/status/ethanc/clyde/workflow.yaml" alt="Build status"></a>
+  <a href="https://codecov.io/gh/ethanc/clyde"><img src="https://codecov.io/gh/ethanc/clyde/branch/main/graph/badge.svg" alt="Coverage report"></a>
+  <a href="https://pypi.org/project/discord-clyde/"><img src="https://img.shields.io/pypi/dm/discord-clyde" alt="PyPI downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/pypi/l/discord-clyde" alt="License"></a>
+</p>
 
-Clyde is a modern, type-hinted Python library for seamless interaction with the [Discord](https://discord.com/) Webhook API.
+<p align="center"><strong>Build rich Discord Webhook API interactions with a typed Python API.</strong></p>
 
-It's lightweight, developer-friendly, and supports advanced features like [Components](https://discord.com/developers/docs/components/overview) and [Embeds](https://discord.com/developers/docs/resources/message#embed-object).
+Clyde supports plain messages, [Components](https://discord.com/developers/docs/components/overview), and rich [Embeds](https://discord.com/developers/docs/resources/message#embed-object) for the [Discord Webhook API](https://discord.com/developers/docs/resources/webhook). It validates each payload and sends it through synchronous or asynchronous HTTP methods.
 
 ## Features
 
--   Fully type-hinted for an excellent developer experience
--   Input validation powered by [msgspec](https://github.com/jcrist/msgspec)
--   Support for all Webhook-compatible [Components](https://discord.com/developers/docs/components/overview)
--   Granular customization of rich [Embeds](https://discord.com/developers/docs/resources/message#embed-object)
--   Helpers for Discord-flavored markdown, including timestamps
--   Compatible with both synchronous and asynchronous HTTP requests
--   Seamless automatic retries when encountering Discord rate limits
--   Beautiful generated [documentation](https://clyde.e3n.im/) built with [Zensical](https://github.com/zensical/zensical)
+- Type annotations across the public API
+- Input type and field validation with [msgspec](https://github.com/jcrist/msgspec)
+- Plain content, every webhook-compatible Discord Component, and field-level Embed controls
+- Helpers for Discord-flavored Markdown and timestamps
+- Synchronous and asynchronous HTTP requests through [niquests](https://github.com/jawah/niquests)
+- Automatic retries when Discord returns a rate limit
+- [API documentation](https://clyde.e3n.im/) generated with [Zensical](https://github.com/zensical/zensical)
 
-## Getting Started
-
-### Installation
+## Installation
 
 > [!IMPORTANT]
 > Clyde requires Python 3.11 or later.
 
-Install with [uv](https://github.com/astral-sh/uv) (recommended):
+Add Clyde to a [uv](https://github.com/astral-sh/uv) project:
 
-```
+```console
 uv add discord-clyde
 ```
 
-Alternatively, install with pip:
+## Examples
 
-```
-pip install discord-clyde
-```
-
-### Examples
-
-> [!TIP]
-> Take the examples below and copy/paste them into your project to get started in seconds.
-
-**Send a standard Message**
+### Plain Message
 
 ```py
 from clyde import Webhook
 
-relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
-
-relay.set_avatar_url("https://i.imgur.com/RzkhQgZ.png")
-relay.set_username("Heisenberg")
-
-relay.set_content("[Clyde](https://github.com/EthanC/Clyde) says hi!")
-
-relay.execute()
+Webhook(
+    url="https://discord.com/api/webhooks/00000/XXXXXXXXXX",
+    avatar_url="https://i.imgur.com/RzkhQgZ.png",
+    username="Heisenberg",
+    content="[Clyde](https://github.com/EthanC/Clyde) says hi!",
+).execute()
 ```
 
-![Preview](/assets/readme_example_standard.png)
+<p align="center">
+  <img src="assets/readme_example_standard.png" alt="Plain message preview">
+</p>
 
-**Send a Message with Components**
+### Message With Components
 
 ```py
 from clyde import Webhook
 from clyde.components import ActionRow, LinkButton, TextDisplay
 
-relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
+webhook = Webhook(
+    url="https://discord.com/api/webhooks/00000/XXXXXXXXXX",
+    avatar_url="https://i.imgur.com/BpcKmVO.png",
+    username="TARS",
+)
 
-relay.set_avatar_url("https://i.imgur.com/BpcKmVO.png")
-relay.set_username("TARS")
-
-greeting: TextDisplay = TextDisplay(content="[Clyde](https://github.com/EthanC/Clyde) says hi!")
-
-actions: ActionRow = ActionRow()
-repository: LinkButton = LinkButton()
-
-repository.set_label("Try Clyde")
-repository.set_url("https://github.com/EthanC/Clyde")
-
-actions.add_component(repository)
-relay.add_component(greeting)
-relay.add_component(actions)
-relay.execute()
+webhook.add_component(
+    [
+        TextDisplay(content="[Clyde](https://github.com/EthanC/Clyde) says hi!"),
+        ActionRow(
+            components=[
+                LinkButton(
+                    label="Try Clyde",
+                    url="https://github.com/EthanC/Clyde",
+                )
+            ]
+        ),
+    ]
+).execute()
 ```
 
-![Preview](/assets/readme_example_components.png)
+<p align="center">
+  <img src="assets/readme_example_components.png" alt="Component message preview">
+</p>
 
-**Send a Message with an Embed**
+### Message With an Embed
 
 ```py
 from clyde import Embed, Webhook
 
-
-relay: Webhook = Webhook(url="https://discord.com/api/webhooks/00000/XXXXXXXXXX")
-
-relay.set_avatar_url("https://i.imgur.com/QaTHttz.png")
-relay.set_username("Shady")
-
-rich: Embed = Embed()
-
-rich.set_description("[Clyde](https://github.com/EthanC/Clyde) says hi!")
-rich.set_color("#5865F2")
-
-relay.add_embed(rich)
-relay.execute()
+Webhook(
+    url="https://discord.com/api/webhooks/00000/XXXXXXXXXX",
+    avatar_url="https://i.imgur.com/QaTHttz.png",
+    username="Shady",
+    embeds=[
+        Embed(
+            description="[Clyde](https://github.com/EthanC/Clyde) says hi!",
+            color="#5865F2",
+        )
+    ],
+).execute()
 ```
 
-![Preview](/assets/readme_example_embed.png)
-
-## Logging
-
-Clyde emits records under the `clyde` logger. Webhook request records use
-`clyde.webhook`. The library does not set an application log level or output handler.
-
-```py
-import logging
-
-logging.basicConfig(level=logging.WARNING)
-logging.getLogger("clyde").setLevel(logging.DEBUG)
-```
-
-`DEBUG` records contain request metadata, timings, status codes, and byte counts.
-`INFO` records report content fallbacks and recovery after rate limiting. `WARNING`
-records report retries and skipped incomplete Attachments. Clyde does not log webhook
-credentials, request or response bodies, message content, or attachment data.
+<p align="center">
+  <img src="assets/readme_example_embed.png" alt="Embed message preview">
+</p>
 
 ## Releases
 
-Clyde loosely follows [Semantic Versioning](https://semver.org/) for consistent, predictable releases.
+Clyde loosely follows [Semantic Versioning](https://semver.org/).
 
 ## Contributing
 
-Contributions are welcome - whether it’s fixing bugs or adding new features.
-
--   See [`CONTRIBUTING.md`](/.github/CONTRIBUTING.md) for guidelines.
--   See [Issues](https://github.com/EthanC/Clyde/issues) for known bugs and feature requests.
+Bug fixes and new features are welcome. Read the [contribution guide](.github/CONTRIBUTING.md) before opening a pull request. Known bugs and feature requests are tracked in [GitHub Issues](https://github.com/EthanC/Clyde/issues).
 
 ## Acknowledgments
 
-The Clyde character and Discord brand assets are owned by Discord.
-
-This project is not affiliated with or endorsed by Discord in any way.
+Discord owns the Clyde character and Discord brand assets. This project is not affiliated with or endorsed by Discord.
