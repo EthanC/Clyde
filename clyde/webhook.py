@@ -343,7 +343,23 @@ class Webhook(Struct, kw_only=True):
     https://discord.com/developers/docs/resources/webhook
 
     Attributes:
-        url (str): The URL used for executing the Webhook.
+        url (str): The URL used for executing the Webhook (returned by the Webhooks OAuth2 flow).
+
+        id (str): The ID of the Webhook.
+
+        type (int): The type of the Webhook.
+
+        guild_id (str | None): The guild id this Webhook is for, if any.
+
+        channel_id (str | None): The channel id this Webhook is for, if any.
+
+        name (str | None): The default name of the Webhook.
+
+        avatar (str | None): The default user avatar hash of the Webhook.
+
+        token (str): The secure token of the Webhook (returned for Incoming Webhooks).
+
+        application_id (str | None): The bot/OAuth2 application that created this Webhook.
 
         content (str): The message contents (up to 2000 characters).
 
@@ -378,7 +394,31 @@ class Webhook(Struct, kw_only=True):
     """
 
     url: str = msgspec.field()
-    """The URL used for executing the Webhook."""
+    """the url used for executing the Webhook (returned by the Webhooks OAuth2 flow)."""
+
+    id: UnsetType | str = msgspec.field(default=UNSET)
+    """The ID of the Webhook."""
+
+    type: UnsetType | int = msgspec.field(default=UNSET)
+    """The type of the Webhook."""
+
+    guild_id: UnsetType | None | str = msgspec.field(default=UNSET)
+    """The guild id this Webhook is for, if any."""
+
+    channel_id: UnsetType | None | str = msgspec.field(default=UNSET)
+    """The channel id this Webhook is for, if any."""
+
+    name: UnsetType | None | str = msgspec.field(default=UNSET)
+    """The default name of the Webhook."""
+
+    avatar: UnsetType | None | str = msgspec.field(default=UNSET)
+    """The default user avatar hash of the Webhook."""
+
+    token: UnsetType | str = msgspec.field(default=UNSET)
+    """The secure token of the Webhook (returned for Incoming Webhooks)."""
+
+    application_id: UnsetType | None | str = msgspec.field(default=UNSET)
+    """The bot/OAuth2 application that created this Webhook."""
 
     content: UnsetType | None | Annotated[str, Meta(max_length=2000)] = msgspec.field(
         default=UNSET
@@ -459,6 +499,32 @@ class Webhook(Struct, kw_only=True):
         )
 
         return await self._send_request_async("POST", self._base_url(), req)
+
+    def get(self: Self) -> "Webhook":
+        """
+        Get the current Webhook using its token.
+
+        https://docs.discord.com/developers/resources/webhook#get-webhook-with-token
+
+        Returns:
+            webhook (Webhook): Webhook populated with Discord's response data.
+        """
+        res: Response = self._send_request("GET", self._base_url(), {})
+
+        return self._decode_webhook(res)
+
+    async def get_async(self: Self) -> "Webhook":
+        """
+        Asynchronously get the current Webhook using its token.
+
+        https://docs.discord.com/developers/resources/webhook#get-webhook-with-token
+
+        Returns:
+            webhook (Webhook): Webhook populated with Discord's response data.
+        """
+        res: Response = await self._send_request_async("GET", self._base_url(), {})
+
+        return self._decode_webhook(res)
 
     def modify(
         self: Self,
@@ -1109,6 +1175,15 @@ class Webhook(Struct, kw_only=True):
             raise ValueError(
                 "Call retain_attachment() or clear_attachments() before uploading files in a message edit"
             )
+
+    def _decode_webhook(self: Self, res: Response) -> "Webhook":
+        """Decode a Webhook response and retain its executable URL."""
+        data: dict[str, Any] = msgspec.json.decode(
+            res.content or b"", type=dict[str, Any]
+        )
+        data.setdefault("url", self._base_url())
+
+        return msgspec.convert(data, type=Webhook)
 
     def _base_url(self: Self) -> str:
         """Return the Webhook URL without query parameters or fragments."""

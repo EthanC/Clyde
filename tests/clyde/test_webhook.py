@@ -73,6 +73,24 @@ def test_webhook_execute() -> None:
     assert isinstance(res, Response) and res.ok
 
 
+def test_webhook_get() -> None:
+    """Validate token-authenticated Webhook retrieval against Discord."""
+    webhook = Webhook(url=f"{STRING_URL_WEBHOOK}/?wait=True#fragment")
+    result = webhook.get()
+
+    assert isinstance(result, Webhook)
+    assert isinstance(result.id, str)
+    assert result.type == 1
+    assert isinstance(result.guild_id, str)
+    assert isinstance(result.channel_id, str)
+    assert isinstance(result.name, str)
+    assert isinstance(result.url, str)
+
+    async_result = run(webhook.get_async())
+
+    assert async_result == result
+
+
 def test_webhook_modify() -> None:
     """Validate token-authenticated Webhook modifications against Discord."""
     webhook = Webhook(url=f"{STRING_URL_WEBHOOK}/?wait=True#fragment")
