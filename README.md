@@ -8,7 +8,6 @@
   <a href="https://github.com/EthanC/Clyde/actions/workflows/workflow.yaml"><img src="https://img.shields.io/github/actions/workflow/status/ethanc/clyde/workflow.yaml" alt="Build status"></a>
   <a href="https://codecov.io/gh/ethanc/clyde"><img src="https://codecov.io/gh/ethanc/clyde/branch/main/graph/badge.svg" alt="Coverage report"></a>
   <a href="https://pypi.org/project/discord-clyde/"><img src="https://img.shields.io/pypi/dm/discord-clyde" alt="PyPI downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/pypi/l/discord-clyde" alt="License"></a>
 </p>
 
 <p align="center"><strong>Build rich Discord Webhook API interactions with a typed Python API.</strong></p>
