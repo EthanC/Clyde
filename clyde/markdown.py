@@ -1,5 +1,7 @@
 """Define the Markdown class and its associates."""
 
+from collections.abc import Sequence
+
 
 class Markdown:
     """
@@ -205,22 +207,52 @@ class Markdown:
         return f"[{content}]({url})"
 
     @staticmethod
-    def bulleted_list(items: list[str]) -> str:
+    def bulleted_list(items: Sequence[str | dict[str, str | int]]) -> str:
         """
         Format the provided items as a bulleted list.
 
         Arguments:
-            items (list[str]): A list of items to format.
+            items (list[str | dict[str, str | int]]): A list of items to format. A
+                dictionary item must contain a string ``value`` and an integer
+                ``indent`` from 0 through 10.
 
         Returns:
             content (str): Items formatted as a bulleted list.
         """
-        result: str = ""
+        result: list[str] = []
 
         for entry in items:
-            result += f"- {entry}\n"
+            if isinstance(entry, str):
+                value: str = entry
+                indent: int = 0
+            elif isinstance(entry, dict):
+                if set(entry) != {"value", "indent"}:
+                    raise ValueError(
+                        'Bulleted list dictionaries must contain only "value" and '
+                        '"indent"'
+                    )
 
-        return result.strip()
+                value = entry["value"]
+                indent = entry["indent"]
+
+                if not isinstance(value, str):
+                    raise TypeError('Bulleted list dictionary "value" must be a string')
+
+                if type(indent) is not int:
+                    raise TypeError(
+                        'Bulleted list dictionary "indent" must be an integer'
+                    )
+
+                if not 0 <= indent <= 10:
+                    raise ValueError(
+                        'Bulleted list dictionary "indent" must be between 0 and 10'
+                    )
+            else:
+                raise TypeError("Bulleted list items must be strings or dictionaries")
+
+            result.append(f"{'  ' * indent}- {value}")
+
+        return "\n".join(result)
 
     @staticmethod
     def numbered_list(items: list[str]) -> str:
