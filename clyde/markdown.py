@@ -255,22 +255,49 @@ class Markdown:
         return "\n".join(result)
 
     @staticmethod
-    def numbered_list(items: list[str]) -> str:
+    def numbered_list(items: Sequence[str | dict[str, str | int]]) -> str:
         """
         Format the provided items as a numbered list.
 
         Arguments:
-            items (list[str]): A list of items to format.
+            items (list[str | dict[str, str | int]]): A list of items to format. A
+                dictionary item must contain a string ``value`` and an integer
+                ``indent`` from 0 through 11.
 
         Returns:
             content (str): Items formatted as a numbered list.
         """
-        result: str = ""
-        number: int = 1
+        result: list[str] = []
 
-        for entry in items:
-            result += f"{number}. {entry}\n"
+        for number, entry in enumerate(items, start=1):
+            if isinstance(entry, str):
+                value: str = entry
+                indent: int = 0
+            elif isinstance(entry, dict):
+                if set(entry) != {"value", "indent"}:
+                    raise ValueError(
+                        'Numbered list dictionaries must contain only "value" and '
+                        '"indent"'
+                    )
 
-            number += 1
+                value = entry["value"]
+                indent = entry["indent"]
 
-        return result.strip()
+                if not isinstance(value, str):
+                    raise TypeError('Numbered list dictionary "value" must be a string')
+
+                if type(indent) is not int:
+                    raise TypeError(
+                        'Numbered list dictionary "indent" must be an integer'
+                    )
+
+                if not 0 <= indent <= 11:
+                    raise ValueError(
+                        'Numbered list dictionary "indent" must be between 0 and 11'
+                    )
+            else:
+                raise TypeError("Numbered list items must be strings or dictionaries")
+
+            result.append(f"{'   ' * indent}{number}. {value}")
+
+        return "\n".join(result)
