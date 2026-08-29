@@ -1,6 +1,6 @@
 [project]
 name = "discord-clyde"
-version = "1.0.0"
+version = "1.0.1"
 description = "Build rich Discord Webhook API interactions with a typed Python API."
 readme = "README.md"
 authors = [
