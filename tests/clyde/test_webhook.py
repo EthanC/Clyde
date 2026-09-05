@@ -25,6 +25,7 @@ from clyde import (
     Webhook,
 )
 from clyde.components import TextDisplay
+from clyde.constants import WEBHOOK_FILE_UPLOAD_MAX_SIZE
 from clyde.webhook import MessageFlags
 
 from .constants import (
@@ -611,6 +612,31 @@ def test_webhook_execute_requires_message() -> None:
 
     with pytest.raises(ValueError, match=error):
         run(Webhook(url=STRING_URL_WEBHOOK).execute_async())
+
+
+def test_webhook_file_upload_size_limit() -> None:
+    """Allow file uploads at the 20 MiB request limit."""
+    webhook = Webhook(url=STRING_URL_WEBHOOK)
+    webhook.add_attachment("first.bin", b"x" * (WEBHOOK_FILE_UPLOAD_MAX_SIZE // 2))
+    webhook.add_attachment("second.bin", b"x" * (WEBHOOK_FILE_UPLOAD_MAX_SIZE // 2))
+
+    webhook._validate()
+
+
+def test_webhook_rejects_oversized_file_upload_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject files over 20 MiB before building or sending the request."""
+    webhook = Webhook(url=STRING_URL_WEBHOOK)
+    webhook.add_attachment("oversized.bin", b"x" * (WEBHOOK_FILE_UPLOAD_MAX_SIZE + 1))
+
+    def unexpected_build(*args: object, **kwargs: object) -> dict:
+        raise AssertionError("request was built before upload validation")
+
+    monkeypatch.setattr(Webhook, "_build_request", unexpected_build)
+
+    with pytest.raises(ValueError, match="cannot exceed 20 MiB"):
+        webhook.execute()
 
 
 def test_webhook_set_content() -> None:

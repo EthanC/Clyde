@@ -37,6 +37,7 @@ from clyde.constants import (
     ATTACHMENT_DESCRIPTION_MAX_LENGTH,
     MESSAGE_COMPONENT_MAX_COUNT,
     MESSAGE_EMBED_MAX_COUNT,
+    WEBHOOK_FILE_UPLOAD_MAX_SIZE,
 )
 from clyde.embed import Embed
 from clyde.message import Message
@@ -1241,6 +1242,17 @@ class Webhook(Struct, kw_only=True, dict=True, weakref=True):
     def _validate(self: Self, edit: bool = False) -> None:
         """Convert applicable data types prior to Webhook serialization."""
         self._sync_component_owners()
+
+        attachment_bytes: int = sum(
+            len(attachment.content)
+            for attachment in self._valid_attachments()
+            if isinstance(attachment.content, bytes)
+        )
+        if attachment_bytes > WEBHOOK_FILE_UPLOAD_MAX_SIZE:
+            raise ValueError(
+                "Webhook file uploads cannot exceed "
+                f"{WEBHOOK_FILE_UPLOAD_MAX_SIZE // (1024 * 1024)} MiB"
+            )
 
         if not edit and not any(
             (
